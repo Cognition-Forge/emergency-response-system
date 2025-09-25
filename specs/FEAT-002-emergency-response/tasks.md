@@ -87,19 +87,21 @@ This implementation follows a streamlined, file-based approach that emphasizes s
 
 ### AI Agent Implementation (Gate 3)
 
-- [ ] **TASK-006**: Implement AI agent with file-based prompt system
+- [x] **TASK-006**: Implement AI agent with file-based prompt system
   - Create `ai_agent.py` with AccommodationAgent class
   - Implement prompt template loading from text files
   - Add OpenAI SDK integration with structured JSON response parsing
   - Implement iteration evaluation logic with continue/stop decision making
   - Add final recommendation generation with business justification
+  - Evidence: `uv run python -m pytest` (24 passed, 1 skipped)
 
-- [ ] **TASK-007**: AI agent testing and prompt optimization
+- [x] **TASK-007**: AI agent testing and prompt optimization
   - Unit tests for prompt template loading and merging
   - Integration tests with OpenAI API (using test scenarios)
   - Test early stopping logic with configurable thresholds
   - Validate AI response parsing and error handling
   - Performance testing: <10s per AI evaluation, proper timeout handling
+  - Evidence: `uv run python -m pytest` (26 passed, 2 skipped); `DATABASE_URL=… uv run python -m pytest` (33 passed, 1 skipped)
 
 ### CLI Interface and Output (Gate 4)
 

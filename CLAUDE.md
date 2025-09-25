@@ -11,6 +11,8 @@
 - `./scripts/utils/load-scenario.sh <scenario>`: seeds demo data (`scenario1|scenario2|scenario3|cleanup`).
 - `PGPASSWORD=… psql ... -f scripts/queries/validation-checks.sql`: validates scenario coverage and search results.
 - `docker compose down -v`: tears down stack and purges volumes for a clean rebuild.
+- `uv sync` (run inside `emergency_accommodation/`): installs CLI dependencies into `.venv/`.
+- `uv run python -m pytest`: executes unit suite; add `DATABASE_URL=…` for live DB + AI integration.
 
 ## Coding Style & Naming Conventions
 - SQL files use uppercase keywords, snake_case identifiers, and 4-space indents.
@@ -22,6 +24,10 @@
 - Validation relies on the helper SQL under `scripts/queries/`; load all three scenarios before running checks.
 - Manual verification: run `validation-checks.sql` then `accommodation-analysis.sql` to confirm `fn_emergency_inventory_search` outputs expected impact levels.
 - When adding scenario data, include deterministic UUIDs and expand validation queries with matching expectations.
+- AI agent tests mock OpenAI responses; live suites require exporting `OPENAI_API_KEY` and `DATABASE_URL`. Timeout behaviour defaults to 12s—tune with `AI_TIMEOUT_SECONDS` if needed.
+
+## Documentation
+- Project-specific instructions are maintained in `emergency_accommodation/README.md`; update it when workflows or required environment variables change.
 
 ## Commit & Pull Request Guidelines
 - Commits: present-tense imperative (“Add scenario3 critical dataset”); bundle related SQL + docs edits together.
