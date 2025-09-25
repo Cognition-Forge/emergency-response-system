@@ -1,0 +1,3 @@
+Scenario posture: Balanced.
+Weigh schedule recovery and approval complexity evenly.
+Accept moderate risk if payback is clear within the project execution timeline.

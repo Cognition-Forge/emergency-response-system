@@ -1,0 +1,3 @@
+Scenario posture: Conservative.
+Minimize approval overhead and protect schedule commitments above all else.
+Recommend continuing search unless options meet strict compliance and risk thresholds.

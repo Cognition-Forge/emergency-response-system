@@ -1,0 +1,29 @@
+default:
+  max_iterations: 3
+  time_window_type: "weekly"
+  batch_size_per_iteration: 10
+  search_order: "urgency_first"
+  early_stopping_threshold: 5
+  risk_tolerance: "moderate"
+  approval_preference: "minimize"
+
+scenarios:
+  scenario1:
+    risk_tolerance: "conservative"
+    approval_preference: "minimize"
+    max_iterations: 2
+    early_stopping_threshold: 4
+    search_order: "urgency_first"
+  scenario2:
+    risk_tolerance: "moderate"
+    early_stopping_threshold: 8
+    max_iterations: 3
+    batch_size_per_iteration: 12
+    search_order: "availability_first"
+  scenario3:
+    risk_tolerance: "aggressive"
+    approval_preference: "accept_higher"
+    max_iterations: 3
+    batch_size_per_iteration: 15
+    search_order: "availability_first"
+    time_window_type: "priority_based"
