@@ -1,0 +1,10 @@
+#!/bin/sh
+# Minimal locale shim for Postgres init on Alpine images without glibc locales.
+set -eu
+
+if [ "${1-}" = "-a" ]; then
+  printf '%s\n' 'C' 'C.UTF-8' 'POSIX'
+else
+  current=${LC_ALL-${LANG-${LANGUAGE-C}}}
+  printf '%s\n' "${current:-C}"
+fi

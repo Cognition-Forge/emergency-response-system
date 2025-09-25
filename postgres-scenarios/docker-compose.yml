@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  materials-db:
+    image: postgres:17-alpine
+    container_name: materials-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: ${POSTGRES_INITDB_ARGS}
+      POSTGRES_SSL_CERT_FILE: ${POSTGRES_SSL_CERT_FILE}
+      POSTGRES_SSL_KEY_FILE: ${POSTGRES_SSL_KEY_FILE}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./scripts/init:/docker-entrypoint-initdb.d:ro
+      - ./certs:/certs:ro
+      - ./scripts/bin/locale:/usr/local/bin/locale:ro
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_logs:/var/log/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    user: postgres
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    cpus: 1.0
+    networks:
+      - materials_network
+
+volumes:
+  postgres_data:
+  postgres_logs:
+
+networks:
+  materials_network:
+    driver: bridge
