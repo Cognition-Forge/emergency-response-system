@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import AsyncIterator, Mapping
 
 from dotenv import load_dotenv
+from agents.models import _openai_shared
 from openai import AsyncOpenAI
 
 from ai_agent import AIIntegrationError, AccommodationAgent, load_prompt_templates
@@ -101,6 +102,8 @@ async def run_accommodation_analysis(
 
     try:
         async with create_openai_client(openai_api_key) as client:
+            _openai_shared.set_default_openai_key(openai_api_key)
+            _openai_shared.set_default_openai_client(client)
             agent = AccommodationAgent(search_config, client, prompt_templates)
 
             with progress:

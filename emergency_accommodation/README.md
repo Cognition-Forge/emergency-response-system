@@ -114,6 +114,12 @@ Common launch patterns:
 
 Architecture overviews are available in [`docs/emergency_accommodation_flowchart.md`](../docs/emergency_accommodation_flowchart.md).
 
+## AI Agent Internals
+- The CLI now relies on the OpenAI Agents SDK (`openai-agents`) to evaluate each iteration and produce a final recommendation.
+- Prompt text files are merged into the Agent’s `instructions`, while iteration payloads (failed items + candidate inventory) are passed as JSON.
+- Structured outputs from the Agent are parsed into the existing domain models (`IterationDecision`, `FinalRecommendation`), so downstream display logic remains unchanged.
+- Timeout, temperature, and token limits are still controlled through YAML/env overrides listed above.
+
 ## Testing
 Unit tests (mocked AI + in-memory DB fakes):
 ```bash

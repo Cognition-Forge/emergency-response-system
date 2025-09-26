@@ -1,5 +1,8 @@
 # Repository Guidelines
 
+## Top Priority Instruction
+- **NEVER delete any markdown files (`*.md`).** Preserve all markdown documentation unless explicitly instructed otherwise.
+
 ## Project Structure & Module Organization
 - `postgres-scenarios/`: Dockerised PostgreSQL stack, init scripts, scenario data, docs.
 - `specs/`: Ticket requirements, design notes, task trackers (follow before coding).

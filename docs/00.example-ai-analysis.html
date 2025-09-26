@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Emergency Response System - Interactive Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ff88;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-container {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .intro {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .intro h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, #00d4ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .intro p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .scenarios-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .scenario-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 2rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scenario-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .scenario-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--accent-color);
+        }
+
+        .scenario-card.simple::before { --accent-color: #00ff88; }
+        .scenario-card.complex::before { --accent-color: #ffaa00; }
+        .scenario-card.critical::before { --accent-color: #ff4444; }
+
+        .scenario-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .scenario-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .risk-badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .risk-low { background: #00ff88; color: #000; }
+        .risk-medium { background: #ffaa00; color: #000; }
+        .risk-critical { background: #ff4444; color: #fff; }
+
+        .scenario-details {
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+
+        .analysis-container {
+            display: none;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-top: 2rem;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .ai-analysis {
+            margin-bottom: 2rem;
+        }
+
+        .ai-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .ai-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(45deg, #00d4ff, #00ff88);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .analysis-steps {
+            list-style: none;
+            padding: 1rem 0;
+        }
+
+        .analysis-step {
+            padding: 0.5rem 0;
+            opacity: 0;
+            animation: fadeInStep 0.5s ease forwards;
+        }
+
+        .analysis-step:nth-child(1) { animation-delay: 0.1s; }
+        .analysis-step:nth-child(2) { animation-delay: 0.3s; }
+        .analysis-step:nth-child(3) { animation-delay: 0.5s; }
+        .analysis-step:nth-child(4) { animation-delay: 0.7s; }
+
+        @keyframes fadeInStep {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .analysis-step::before {
+            content: '✓';
+            color: #00ff88;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        .decisions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .decision-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 1.5rem;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .decision-card:hover {
+            border-color: #00d4ff;
+            background: rgba(255, 255, 255, 0.12);
+            transform: scale(1.02);
+        }
+
+        .decision-card.recommended {
+            border-color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .decision-card.recommended::after {
+            content: '⭐ RECOMMENDED';
+            position: absolute;
+            top: -10px;
+            right: 15px;
+            background: #00ff88;
+            color: #000;
+            padding: 0.2rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .decision-title {
+            font-weight: bold;
+            margin-bottom: 0.8rem;
+            color: #00d4ff;
+        }
+
+        .decision-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            margin: 1rem 0;
+        }
+
+        .metric {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.3rem 0.6rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+        }
+
+        .metric.time { color: #00d4ff; }
+        .metric.cost { color: #ffaa00; }
+        .metric.risk { color: #ff4444; }
+
+        .decision-details {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+
+        .impact-visualization {
+            display: none;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .timeline {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .timeline-item {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: #00d4ff;
+        }
+
+        .timeline-item:last-child::after {
+            display: none;
+        }
+
+        .timeline-date {
+            background: #00d4ff;
+            color: #000;
+            padding: 0.3rem 0.6rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .timeline-event {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .technical-details {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            border-left: 4px solid #00d4ff;
+        }
+
+        .tech-toggle {
+            cursor: pointer;
+            color: #00d4ff;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tech-content {
+            display: none;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 1rem;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .back-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: #fff;
+            padding: 0.8rem 1.5rem;
+            border-radius: 25px;
+            cursor: pointer;
+            margin-top: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: space-around;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 2rem;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00ff88;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .scenarios-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .decisions-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .intro h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🤖 AI Emergency Response System</div>
+        <div class="status">
+            <div class="status-dot"></div>
+            <span>All Systems Normal</span>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="intro">
+            <h1>Intelligent Materials Emergency Response</h1>
+            <p>Experience how AI transforms critical supply chain disruptions into optimized decisions within seconds. Click any scenario below to see our emergency accommodation system in action.</p>
+        </div>
+
+        <div class="scenarios-grid" id="scenariosGrid">
+            <div class="scenario-card simple" onclick="showAnalysis('simple')">
+                <div class="scenario-header">
+                    <div>
+                        <div class="scenario-title">🚛 Transportation Accident</div>
+                        <div class="scenario-details">SCN-2024-001: Critical valve components lost in highway accident</div>
+                    </div>
+                    <div class="risk-badge risk-low">Low Impact</div>
+                </div>
+                <div class="scenario-details">
+                    <strong>Affected Materials:</strong> 50× Ball Valve DN150 PN16<br>
+                    <strong>Critical ROS Date:</strong> Feb 15, 2024 (5 days)<br>
+                    <strong>Project Impact:</strong> Process Area A commissioning
+                </div>
+            </div>
+
+            <div class="scenario-card complex" onclick="showAnalysis('complex')">
+                <div class="scenario-header">
+                    <div>
+                        <div class="scenario-title">🔥 Supplier Facility Fire</div>
+                        <div class="scenario-details">SCN-2024-005: Critical pump equipment destroyed</div>
+                    </div>
+                    <div class="risk-badge risk-medium">Medium Impact</div>
+                </div>
+                <div class="scenario-details">
+                    <strong>Affected Materials:</strong> 2× Centrifugal Pump CP-100<br>
+                    <strong>Critical ROS Date:</strong> Mar 01, 2024 (4 days)<br>
+                    <strong>Project Impact:</strong> Process Unit B commissioning
+                </div>
+            </div>
+
+            <div class="scenario-card critical" onclick="showAnalysis('critical')">
+                <div class="scenario-header">
+                    <div>
+                        <div class="scenario-title">🌪️ Hurricane Disaster</div>
+                        <div class="scenario-details">Multiple SCNs: Severe weather disruption</div>
+                    </div>
+                    <div class="risk-badge risk-critical">Critical Impact</div>
+                </div>
+                <div class="scenario-details">
+                    <strong>Affected Materials:</strong> 250× Steel I-Beam 300x150<br>
+                    <strong>Critical ROS Date:</strong> Apr 05, 2024 (8 days)<br>
+                    <strong>Project Impact:</strong> Critical path structural work
+                </div>
+            </div>
+        </div>
+
+        <div class="analysis-container" id="analysisContainer">
+            <!-- Dynamic content will be inserted here -->
+        </div>
+
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="stat-value">20.3s</div>
+                <div class="stat-label">Analysis Time</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">847</div>
+                <div class="stat-label">Records Analyzed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">12</div>
+                <div class="stat-label">Warehouses Scanned</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">73%</div>
+                <div class="stat-label">Impact Reduction</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const scenarios = {
+            simple: {
+                title: "Transportation Accident Analysis",
+                description: "SCN-2024-001: Critical valve components emergency accommodation",
+                analysisSteps: [
+                    "Scanning 847 inventory records across 12 warehouses...",
+                    "Identifying 75 DN150 ball valves in Central Warehouse (free inventory)",
+                    "Analyzing 120 DN150 ball valves in Regional Warehouse (compatible WBS)",
+                    "Analysis Complete - 3 accommodation options identified with minimal impact"
+                ],
+                decisions: [
+                    {
+                        title: "Central Warehouse Allocation",
+                        recommended: true,
+                        metrics: [
+                            { type: "time", value: "Same day delivery" },
+                            { type: "cost", value: "$2,400 transport" },
+                            { type: "risk", value: "No impact" }
+                        ],
+                        details: "Perfect match: 75 available units, exact WBS allocation, same region transport. No commitment conflicts or approval requirements.",
+                        technical: `-- Free inventory query results
+warehouse_inventory: 75 units available
+quantity_reserved: 0 (no commitments)
+safety_stock: 5 units
+availability_status: 'free'
+compatibility_score: 100 (exact WBS match)
+availability_score: 100 (no conflicts)`
+                    },
+                    {
+                        title: "Regional Warehouse Split",
+                        metrics: [
+                            { type: "time", value: "1-2 day delivery" },
+                            { type: "cost", value: "$3,800 transport" },
+                            { type: "risk", value: "Minor logistics" }
+                        ],
+                        details: "Alternative source: 120 available units, compatible WBS, requires longer transport route but provides backup option.",
+                        technical: `-- Alternative inventory analysis
+warehouse_inventory: 120 units available
+wbs_compatibility: 80 (parent WBS level)
+logistics_score: 70 (cross-region)
+risk_assessment: 'minimal'`
+                    },
+                    {
+                        title: "Emergency Procurement",
+                        metrics: [
+                            { type: "time", value: "3-5 day delivery" },
+                            { type: "cost", value: "$18,500 expedite" },
+                            { type: "risk", value: "Schedule risk" }
+                        ],
+                        details: "Backup option: Direct supplier expedite with air freight. Higher cost but guaranteed supply if inventory options fail.",
+                        technical: `-- Emergency procurement analysis
+supplier_response_time: 72 hours
+expedite_cost: $18,500
+schedule_impact: 2-3 days delay risk
+approval_required: 'procurement_manager'`
+                    }
+                ],
+                timeline: [
+                    { date: "Feb 10", event: "Incident Detected" },
+                    { date: "Feb 11", event: "Materials Allocated" },
+                    { date: "Feb 12", event: "Transport Complete" },
+                    { date: "Feb 15", event: "ROS Date Met" }
+                ]
+            },
+            complex: {
+                title: "Supplier Facility Fire Analysis",
+                description: "SCN-2024-005: Critical pump equipment accommodation with commitment conflicts",
+                analysisSteps: [
+                    "Scanning 847 inventory records for Centrifugal Pump CP-100...",
+                    "Analyzing 3 units in Central Warehouse (2 reserved for medium priority FMR)",
+                    "Evaluating commitment conflicts: existing ROS Mar 15 vs. critical ROS Mar 01",
+                    "Analysis Complete - Reassignment recommended with manager approval required"
+                ],
+                decisions: [
+                    {
+                        title: "Reassign Reserved Inventory",
+                        recommended: true,
+                        metrics: [
+                            { type: "time", value: "2 day approval + transport" },
+                            { type: "cost", value: "$15,000 mitigation" },
+                            { type: "risk", value: "Moderate impact" }
+                        ],
+                        details: "Optimal solution: Reassign 2 pumps from Process Unit C (ROS Mar 15) to Process Unit B (ROS Mar 01). Requires manager approval and affects 1 existing FMR.",
+                        technical: `-- Commitment conflict analysis
+reserved_quantity: 2.0 pumps
+commitment_priority: 40 (medium)
+existing_ros_date: '2024-03-15'
+critical_ros_date: '2024-03-01'
+time_advantage: 14 days earlier
+impact_level: 'moderate'
+approval_required: 'manager + affected_team'`
+                    },
+                    {
+                        title: "Split Across Multiple Sources",
+                        metrics: [
+                            { type: "time", value: "3-4 day coordination" },
+                            { type: "cost", value: "$8,500 logistics" },
+                            { type: "risk", value: "Coordination complexity" }
+                        ],
+                        details: "Alternative approach: 1 pump from reassignment + 1 pump from emergency procurement. Reduces single-point impact but increases logistics complexity.",
+                        technical: `-- Multi-source allocation
+source_1: reassign 1 pump (lower impact)
+source_2: emergency procure 1 pump
+coordination_overhead: 48 hours
+risk_mitigation: distributed sources`
+                    },
+                    {
+                        title: "Escalate to Emergency Reserves",
+                        metrics: [
+                            { type: "time", value: "Same day (approval pending)" },
+                            { type: "cost", value: "$45,000 replacement" },
+                            { type: "risk", value: "Depletes reserves" }
+                        ],
+                        details: "High-impact option: Use emergency stockpile reserves. Fastest resolution but requires executive approval and immediate replacement procurement.",
+                        technical: `-- Emergency reserve analysis
+emergency_stock: 1 pump available
+safety_stock_impact: critical
+replacement_cost: $45,000
+approval_required: 'executive'
+project_risk_elevation: 'medium->high'`
+                    }
+                ],
+                timeline: [
+                    { date: "Feb 25", event: "Supplier Fire Reported" },
+                    { date: "Feb 26", event: "Manager Approval" },
+                    { date: "Feb 27", event: "FMR Reassigned" },
+                    { date: "Mar 01", event: "Critical ROS Met" }
+                ]
+            },
+            critical: {
+                title: "Hurricane Disaster Analysis",
+                description: "Multiple SCN failure: Severe weather emergency requiring emergency reserves",
+                analysisSteps: [
+                    "Emergency protocol activated - multiple critical path SCNs affected...",
+                    "Scanning emergency stockpile reserves across 4 secure facilities...",
+                    "Analyzing safety stock depletion impact: 250 units needed, 50 available above minimum",
+                    "CRITICAL: Emergency reserve usage requires executive approval - project risk elevated"
+                ],
+                decisions: [
+                    {
+                        title: "Deploy Emergency Reserves",
+                        recommended: true,
+                        metrics: [
+                            { type: "time", value: "8 hours (approval pending)" },
+                            { type: "cost", value: "$500K replacement" },
+                            { type: "risk", value: "Critical - reserves depleted" }
+                        ],
+                        details: "ONLY VIABLE OPTION: Use complete emergency safety stock (250 units). Requires board approval due to critical project risk exposure.",
+                        technical: `-- Emergency reserve depletion
+total_required: 250 units
+available_above_safety: 50 units
+safety_stock_usage: 200 units (CRITICAL)
+replacement_timeline: 15 days expedite
+project_risk_level: 'high'
+board_approval: required
+insurance_claim: $2.3M estimated`
+                    },
+                    {
+                        title: "Delay Project Timeline",
+                        metrics: [
+                            { type: "time", value: "30-45 day delay" },
+                            { type: "cost", value: "$2.8M penalty" },
+                            { type: "risk", value: "Contract penalties" }
+                        ],
+                        details: "Alternative: Accept project delay while waiting for normal supply chain recovery. Triggers contract penalties and client relationship impact.",
+                        technical: `-- Delay impact analysis
+critical_path_delay: 35 days
+contract_penalties: $2.8M
+client_relationship: 'high_risk'
+alternate_suppliers: 6 weeks minimum
+insurance_coverage: partial`
+                    },
+                    {
+                        title: "Emergency Supplier Activation",
+                        metrics: [
+                            { type: "time", value: "14-21 day delivery" },
+                            { type: "cost", value: "$850K premium" },
+                            { type: "risk", value: "Quality/spec variance" }
+                        ],
+                        details: "High-risk option: Activate emergency suppliers with premium pricing. May require specification compromises and extensive quality verification.",
+                        technical: `-- Emergency supplier analysis
+available_suppliers: 2 qualified
+specification_match: 85% (compromises needed)
+quality_verification: +7 days
+premium_cost: 340% normal price
+regulatory_approval: expedited process required`
+                    }
+                ],
+                timeline: [
+                    { date: "Mar 28", event: "Hurricane Impact" },
+                    { date: "Mar 29", event: "Board Approval" },
+                    { date: "Mar 30", event: "Reserves Deployed" },
+                    { date: "Apr 05", event: "Critical ROS Met" }
+                ]
+            }
+        };
+
+        function showAnalysis(scenarioKey) {
+            const scenario = scenarios[scenarioKey];
+            const container = document.getElementById('analysisContainer');
+            const grid = document.getElementById('scenariosGrid');
+
+            grid.style.display = 'none';
+            container.style.display = 'block';
+
+            // Scroll to analysis
+            container.scrollIntoView({ behavior: 'smooth' });
+
+            container.innerHTML = `
+                <div class="ai-analysis">
+                    <div class="ai-header">
+                        <div class="ai-icon">AI</div>
+                        <div>
+                            <h2>${scenario.title}</h2>
+                            <p>${scenario.description}</p>
+                        </div>
+                    </div>
+
+                    <ul class="analysis-steps">
+                        ${scenario.analysisSteps.map(step => `<li class="analysis-step">${step}</li>`).join('')}
+                    </ul>
+                </div>
+
+                <h3 style="color: #00d4ff; margin-bottom: 1rem;">🎯 AI Recommended Accommodation Options</h3>
+
+                <div class="decisions-grid">
+                    ${scenario.decisions.map(decision => `
+                        <div class="decision-card ${decision.recommended ? 'recommended' : ''}" onclick="showImpact('${scenarioKey}', this)">
+                            <div class="decision-title">${decision.title}</div>
+                            <div class="decision-metrics">
+                                ${decision.metrics.map(metric => `<div class="metric ${metric.type}">${metric.value}</div>`).join('')}
+                            </div>
+                            <div class="decision-details">${decision.details}</div>
+
+                            <div class="technical-details">
+                                <div class="tech-toggle" onclick="event.stopPropagation(); toggleTechnical(this)">
+                                    🔧 Technical Analysis <span>▼</span>
+                                </div>
+                                <div class="tech-content">${decision.technical}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="impact-visualization" id="impactViz">
+                    <h4 style="color: #00ff88; margin-bottom: 1rem;">📊 Implementation Timeline</h4>
+                    <div class="timeline">
+                        ${scenario.timeline.map(item => `
+                            <div class="timeline-item">
+                                <div class="timeline-date">${item.date}</div>
+                                <div class="timeline-event">${item.event}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <button class="back-btn" onclick="showScenarios()">← Back to Scenarios</button>
+            `;
+        }
+
+        function showImpact(scenarioKey, element) {
+            document.getElementById('impactViz').style.display = 'block';
+
+            // Highlight selected decision
+            document.querySelectorAll('.decision-card').forEach(card => {
+                card.style.borderColor = 'transparent';
+            });
+            element.style.borderColor = '#00d4ff';
+            element.style.borderWidth = '3px';
+        }
+
+        function toggleTechnical(element) {
+            const content = element.nextElementSibling;
+            const arrow = element.querySelector('span');
+
+            if (content.style.display === 'none' || !content.style.display) {
+                content.style.display = 'block';
+                arrow.innerHTML = '▲';
+            } else {
+                content.style.display = 'none';
+                arrow.innerHTML = '▼';
+            }
+        }
+
+        function showScenarios() {
+            document.getElementById('scenariosGrid').style.display = 'grid';
+            document.getElementById('analysisContainer').style.display = 'none';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add some loading animation effects
+            const cards = document.querySelectorAll('.scenario-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                setTimeout(() => {
+                    card.style.transition = 'all 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 200);
+            });
+        });
+    </script>
+</body>
+</html>

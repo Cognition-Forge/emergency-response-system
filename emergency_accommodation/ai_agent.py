@@ -6,8 +6,12 @@ import asyncio
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping, Sequence
+from typing import Any, Mapping, Sequence
+
+from agents import Agent, Runner, model_settings
+from agents.run import RunConfig
 from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
 
 from config import DEFAULT_CONFIG_DIR, PromptTemplates
 from config.loader import ConfigurationError
@@ -17,6 +21,7 @@ from models import (
     IterationDecision,
     InventoryOption,
     ModelValidationError,
+    OptionAssessment,
     serialize_option_sequence,
 )
 
@@ -45,13 +50,37 @@ class _IterationContext:
     decision: IterationDecision | None = None
 
 
+class _OptionAssessmentPayload(BaseModel):
+    inventory_id: str
+    summary: str
+    impact_level: str
+    confidence: float
+    approvals_required: list[str] = Field(default_factory=list)
+    trade_offs: list[str] = Field(default_factory=list)
+    score: float
+
+
+class _IterationDecisionPayload(BaseModel):
+    continue_search: bool
+    reasoning: str
+    viable_options: list[_OptionAssessmentPayload]
+    discarded_reasons: list[str] = Field(default_factory=list)
+
+
+class _FinalRecommendationPayload(BaseModel):
+    primary_option: _OptionAssessmentPayload
+    alternatives: list[_OptionAssessmentPayload] = Field(default_factory=list)
+    executive_summary: str
+    risk_mitigation: list[str] = Field(default_factory=list)
+
+
 class AccommodationAgent:
     """Drives AI-assisted decision making for emergency accommodations."""
 
     def __init__(
         self,
         config: Mapping[str, Any],
-        openai_client: AsyncOpenAI,
+        openai_client: AsyncOpenAI | None,
         prompt_templates: Mapping[str, PromptTemplates],
     ) -> None:
         self._config = dict(config)
@@ -75,18 +104,37 @@ class AccommodationAgent:
         failed_payload = tuple(item.to_dict() for item in failed_items)
         inventory_payload = tuple(serialize_option_sequence(inventory_batch))
 
-        prompt = self._build_iteration_prompt(
-            template=template,
-            iteration=iteration_num,
+        payload = self._build_iteration_payload(
             scenario=scenario_name,
+            iteration=iteration_num,
             failed_items=failed_payload,
             inventory_options=inventory_payload,
         )
 
-        response_text = await self._invoke_model(prompt)
-        parsed = self._parse_ai_response(response_text)
-        if not isinstance(parsed, IterationDecision):
-            raise AIIntegrationError("Iteration response did not contain decision payload", code="I302")
+        iteration_agent = self._create_agent(
+            name="Iteration Evaluator",
+            instructions=template.combined,
+            output_type=_IterationDecisionPayload,
+        )
+
+        timeout = float(self._config.get("ai_timeout_seconds", 12.0))
+        try:
+            result = await asyncio.wait_for(
+                Runner.run(
+                    iteration_agent,
+                    payload,
+                    run_config=self._build_run_config(),
+                ),
+                timeout=timeout,
+            )
+        except Exception as exc:  # pragma: no cover - delegated to SDK
+            raise AIIntegrationError("AI request failed", code="I307", cause=exc) from exc
+
+        structured = result.final_output
+        if structured is None:
+            raise AIIntegrationError("Iteration response missing payload", code="I302")
+
+        parsed = self._convert_iteration(structured)
 
         parsed = self._apply_early_stopping(parsed)
 
@@ -110,12 +158,32 @@ class AccommodationAgent:
             raise AIIntegrationError("Scenario context is not available", code="I304")
 
         template = self._load_prompt_template(scenario)
-        prompt = self._build_final_prompt(template, scenario)
-        response_text = await self._invoke_model(prompt)
-        parsed = self._parse_ai_response(response_text)
-        if not isinstance(parsed, FinalRecommendation):
-            raise AIIntegrationError("Final response did not contain recommendation payload", code="I305")
-        return parsed
+        payload = self._build_final_payload(template, scenario)
+
+        final_agent = self._create_agent(
+            name="Final Recommender",
+            instructions=template.combined,
+            output_type=_FinalRecommendationPayload,
+        )
+
+        timeout = float(self._config.get("ai_timeout_seconds", 12.0))
+        try:
+            result = await asyncio.wait_for(
+                Runner.run(
+                    final_agent,
+                    payload,
+                    run_config=self._build_run_config(),
+                ),
+                timeout=timeout,
+            )
+        except Exception as exc:  # pragma: no cover - delegated to SDK
+            raise AIIntegrationError("AI request failed", code="I307", cause=exc) from exc
+
+        structured = result.final_output
+        if structured is None:
+            raise AIIntegrationError("Final response missing payload", code="I305")
+
+        return self._convert_final(structured)
 
     def _load_prompt_template(self, scenario_name: str) -> PromptTemplates:
         try:
@@ -126,12 +194,11 @@ class AccommodationAgent:
                 code="I306",
             ) from exc
 
-    def _build_iteration_prompt(
+    def _build_iteration_payload(
         self,
         *,
-        template: PromptTemplates,
-        iteration: int,
         scenario: str,
+        iteration: int,
         failed_items: Sequence[Mapping[str, Any]],
         inventory_options: Sequence[Mapping[str, Any]],
     ) -> str:
@@ -143,9 +210,9 @@ class AccommodationAgent:
             "inventory_options": list(inventory_options),
             "prior_decisions": [decision.to_dict() for decision in self._decisions],
         }
-        return self._compose_prompt(template.combined, payload)
+        return json.dumps(payload)
 
-    def _build_final_prompt(self, template: PromptTemplates, scenario: str) -> str:
+    def _build_final_payload(self, template: PromptTemplates, scenario: str) -> str:
         payload = {
             "scenario": scenario,
             "search_config": self._config,
@@ -160,7 +227,7 @@ class AccommodationAgent:
             ],
             "collated_options": self._collect_option_assessments(),
         }
-        return self._compose_prompt(template.combined, payload)
+        return json.dumps(payload)
 
     def _collect_option_assessments(self) -> list[dict[str, Any]]:
         assessments: list[dict[str, Any]] = []
@@ -168,73 +235,70 @@ class AccommodationAgent:
             assessments.extend(option.to_dict() for option in decision.viable_options)
         return assessments
 
-    def _compose_prompt(self, template_text: str, payload: Mapping[str, Any]) -> str:
-        encoded = json.dumps(payload, indent=2)
-        return (
-            f"{template_text}\n\nContext JSON:\n{encoded}\n\n"
-            "Respond with JSON containing iteration decisions or final recommendations."
+    def _create_agent(
+        self,
+        *,
+        name: str,
+        instructions: str,
+        output_type: type[BaseModel],
+    ) -> Agent[Any]:
+        temperature = float(self._config.get("ai_temperature", 0.2))
+        max_tokens = int(self._config.get("ai_max_output_tokens", 900))
+        settings = model_settings.ModelSettings(
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
 
-    async def _invoke_model(self, prompt: str) -> str:
-        timeout = float(self._config.get("ai_timeout_seconds", 12.0))
+        system_instructions = (
+            f"{instructions}\n\n"
+            "Always respond using the structured schema provided."
+        )
+
+        return Agent(
+            name=name,
+            instructions=system_instructions,
+            model=self._config.get("ai_model", "gpt-4o-mini"),
+            model_settings=settings,
+            output_type=output_type,
+        )
+
+    def _build_run_config(self) -> RunConfig:
+        # The Agents SDK uses the underlying OpenAI client; we pass model overrides via Agent
+        # and rely on asyncio timeouts at the Runner level for request timing.
+        return RunConfig()
+
+    def _convert_iteration(self, payload: _IterationDecisionPayload) -> IterationDecision:
         try:
-            response = await asyncio.wait_for(
-                self._client.responses.create(  # type: ignore[arg-type,call-overload]
-                    model=self._config.get("ai_model", "gpt-4o-mini"),
-                    input=[
-                        {"role": "system", "content": "You are an emergency accommodation strategist."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=float(self._config.get("ai_temperature", 0.2)),
-                    max_output_tokens=int(self._config.get("ai_max_output_tokens", 900)),
-                    response_format={"type": "json_object"},
-                ),
-                timeout=timeout,
+            viable = tuple(
+                OptionAssessment.from_mapping(option.model_dump())
+                for option in payload.viable_options
             )
-        except asyncio.TimeoutError as exc:
-            raise AIIntegrationError("AI request exceeded timeout", code="I313", cause=exc) from exc
-        except Exception as exc:  # pragma: no cover - network failures
-            raise AIIntegrationError("AI request failed", code="I307", cause=exc) from exc
+        except ModelValidationError as exc:  # pragma: no cover - defensive
+            raise AIIntegrationError("AI iteration payload failed validation", code="I311", cause=exc) from exc
 
-        text = self._extract_text(response)
-        if not text:
-            raise AIIntegrationError("AI response did not contain text output", code="I308")
-        return text
+        return IterationDecision(
+            continue_search=payload.continue_search,
+            reasoning=payload.reasoning,
+            viable_options=viable,
+            discarded_reasons=tuple(payload.discarded_reasons),
+        )
 
-    def _extract_text(self, response: Any) -> str:
-        if hasattr(response, "output_text") and response.output_text:
-            return response.output_text
-        output = getattr(response, "output", None)
-        if not output:
-            return ""
-        for segment in output:
-            content = getattr(segment, "content", None)
-            if not content:
-                continue
-            for block in content:
-                text = getattr(block, "text", None)
-                if text:
-                    return text
-        return ""
-
-    def _parse_ai_response(self, response_text: str) -> IterationDecision | FinalRecommendation:
+    def _convert_final(self, payload: _FinalRecommendationPayload) -> FinalRecommendation:
         try:
-            data = json.loads(response_text)
-        except json.JSONDecodeError as exc:
-            raise AIIntegrationError("AI response was not valid JSON", code="I309", cause=exc) from exc
+            primary = OptionAssessment.from_mapping(payload.primary_option.model_dump())
+            alternatives = tuple(
+                OptionAssessment.from_mapping(option.model_dump())
+                for option in payload.alternatives
+            )
+        except ModelValidationError as exc:  # pragma: no cover - defensive
+            raise AIIntegrationError("AI final payload failed validation", code="I311", cause=exc) from exc
 
-        if not isinstance(data, MutableMapping):
-            raise AIIntegrationError("AI response JSON must be an object", code="I310")
-
-        try:
-            if "continue_search" in data:
-                return IterationDecision.from_mapping(data)
-            if "primary_option" in data:
-                return FinalRecommendation.from_mapping(data)
-        except ModelValidationError as exc:
-            raise AIIntegrationError("AI response failed validation", code="I311", cause=exc) from exc
-
-        raise AIIntegrationError("AI response missing required fields", code="I312")
+        return FinalRecommendation(
+            primary_option=primary,
+            executive_summary=payload.executive_summary,
+            risk_mitigation=tuple(payload.risk_mitigation),
+            alternatives=alternatives,
+        )
 
     def _apply_early_stopping(self, decision: IterationDecision) -> IterationDecision:
         threshold = int(self._config.get("early_stopping_threshold", 0) or 0)

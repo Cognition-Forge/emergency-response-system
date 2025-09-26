@@ -3,7 +3,7 @@
 This repository demonstrates an AI-assisted emergency accommodation workflow built on top of a deterministic PostgreSQL sandbox. It is organised around ticket specifications in `specs/` and split into two primary components:
 
 - `postgres-scenarios/` — Dockerised PostgreSQL 17 stack with schema seeders, three emergency response data scenarios, and validation queries.
-- `emergency_accommodation/` — Python CLI showcasing iterative search, AI-driven decision making, and rich terminal output (in-progress) for the seeded scenarios.
+- `emergency_accommodation/` — Python CLI showcasing iterative search, AI-driven decision making (now powered by the OpenAI Agents SDK), and rich terminal output for the seeded scenarios.
 - Documentation updates live alongside the Python CLI (see `emergency_accommodation/README.md` and `emergency_accommodation/docs/CLI_TROUBLESHOOTING.md`).
 - Visual overview diagrams are available in `docs/emergency_accommodation_flowchart.md`.
 
