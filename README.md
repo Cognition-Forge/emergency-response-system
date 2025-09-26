@@ -4,15 +4,16 @@ This repository demonstrates an AI-assisted emergency accommodation workflow bui
 
 - `postgres-scenarios/` — Dockerised PostgreSQL 17 stack with schema seeders, three emergency response data scenarios, and validation queries.
 - `emergency_accommodation/` — Python CLI showcasing iterative search, AI-driven decision making, and rich terminal output (in-progress) for the seeded scenarios.
+- Documentation updates live alongside the Python CLI (see `emergency_accommodation/README.md` and `emergency_accommodation/docs/CLI_TROUBLESHOOTING.md`).
 
 ## Getting Started
-1. Clone the repo and install [uv](https://github.com/astral-sh/uv) if not already available.
-2. Bootstrap the Python environment:
+1. Install [uv](https://github.com/astral-sh/uv) if it is not already on your path.
+2. Create the Python environment and install dependencies:
    ```bash
    cd emergency_accommodation
    uv sync
    ```
-3. Bring the database online in a separate shell:
+3. Start the PostgreSQL sandbox in a separate shell:
    ```bash
    cd ../postgres-scenarios
    cp .env.example .env   # adjust credentials if desired
@@ -21,17 +22,19 @@ This repository demonstrates an AI-assisted emergency accommodation workflow bui
    ./scripts/utils/load-scenario.sh scenario2
    ./scripts/utils/load-scenario.sh scenario3
    ```
-4. Export required environment variables before running the CLI or live tests:
+4. Export runtime environment variables before launching the CLI:
    ```bash
    export OPENAI_API_KEY=...           # real key for production runs; mocked in unit tests
    export DATABASE_URL="postgresql://materials_admin:change_me@127.0.0.1:5432/materials_management"
    ```
+5. Run the emergency accommodation CLI:
+   ```bash
+   cd emergency_accommodation
+   uv run python main.py --scenario scenario1
+   ```
+   Use `--config-dir` to point at alternate configuration roots and `--max-iterations` to override iteration limits when needed.
 
-## Development Workflow
-- Follow the specification tickets under `specs/` and update their `tasks.md` checklists as progress is made.
-- `AGENTS.md` summarises repo conventions, testing discipline, and documentation pointers.
-- `docs/Claude/` contains domain primers that explain the accommodation storylines.
-- Use the Python README at `emergency_accommodation/README.md` for CLI-specific options, configuration knobs, and troubleshooting tips.
+Refer to `AGENTS.md` or `CLAUDE.md` for contributor workflow conventions.
 
 ## Testing
 - Run the mocked/unit suites:

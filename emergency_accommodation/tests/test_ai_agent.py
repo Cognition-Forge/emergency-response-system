@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import asyncio
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from ai_agent import AIIntegrationError, AccommodationAgent, load_prompt_templates
 from config import load_search_parameters
 from models import FailedItem, InventoryOption
+from openai import AsyncOpenAI
 
 
 @dataclass
@@ -113,7 +114,8 @@ async def test_evaluate_iteration_returns_decision(monkeypatch: pytest.MonkeyPat
             ],
         }
     )
-    fake_client = _FakeOpenAIClient([payload])
+    fake_client_impl = _FakeOpenAIClient([payload])
+    fake_client = cast(AsyncOpenAI, fake_client_impl)
     templates = load_prompt_templates()
     config = load_search_parameters("scenario1")
 
@@ -128,7 +130,7 @@ async def test_evaluate_iteration_returns_decision(monkeypatch: pytest.MonkeyPat
 
     assert decision.continue_search is True
     assert decision.viable_options[0].summary.startswith("Allocate compressors")
-    assert fake_client.responses.calls[0]["model"] == config.get("ai_model", "gpt-4o-mini")
+    assert fake_client_impl.responses.calls[0]["model"] == config.get("ai_model", "gpt-4o-mini")
 
 
 @pytest.mark.asyncio
@@ -166,7 +168,8 @@ async def test_final_recommendation_returns_payload() -> None:
             "risk_mitigation": ["Notify maintenance for expedited QA"],
         }
     )
-    fake_client = _FakeOpenAIClient([iteration_payload, final_payload])
+    fake_client_impl = _FakeOpenAIClient([iteration_payload, final_payload])
+    fake_client = cast(AsyncOpenAI, fake_client_impl)
     templates = load_prompt_templates()
     config = load_search_parameters("scenario1")
     agent = AccommodationAgent(config, fake_client, templates)
@@ -185,7 +188,7 @@ async def test_final_recommendation_returns_payload() -> None:
 
 @pytest.mark.asyncio
 async def test_invalid_json_raises_error() -> None:
-    fake_client = _FakeOpenAIClient(["not-json"])
+    fake_client = cast(AsyncOpenAI, _FakeOpenAIClient(["not-json"]))
     templates = load_prompt_templates()
     config = load_search_parameters("scenario1")
     agent = AccommodationAgent(config, fake_client, templates)
@@ -219,7 +222,7 @@ async def test_early_stopping_threshold_enforced() -> None:
             ],
         }
     )
-    fake_client = _FakeOpenAIClient([payload])
+    fake_client = cast(AsyncOpenAI, _FakeOpenAIClient([payload]))
     templates = load_prompt_templates()
     config = {**load_search_parameters("scenario1"), "early_stopping_threshold": 1}
     agent = AccommodationAgent(config, fake_client, templates)
@@ -237,7 +240,7 @@ async def test_early_stopping_threshold_enforced() -> None:
 
 @pytest.mark.asyncio
 async def test_ai_timeout_triggers_error() -> None:
-    slow_client = _SlowOpenAIClient(delay=0.05)
+    slow_client = cast(AsyncOpenAI, _SlowOpenAIClient(delay=0.05))
     templates = load_prompt_templates()
     config = {**load_search_parameters("scenario1"), "ai_timeout_seconds": 0.01}
     agent = AccommodationAgent(config, slow_client, templates)

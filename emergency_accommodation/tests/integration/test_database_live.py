@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import os
 import time
+from typing import cast
 
 import pytest
 
 from config import load_search_parameters
 from database import load_failed_items, load_inventory_by_iteration
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
+_database_url = os.getenv("DATABASE_URL")
+if not _database_url:
     pytest.skip("DATABASE_URL is required for live database integration tests", allow_module_level=True)
+DATABASE_URL = cast(str, _database_url)
 
 SCENARIOS = ("scenario1", "scenario2", "scenario3")
 

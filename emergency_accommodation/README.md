@@ -32,13 +32,52 @@ docker compose up -d
 Stop and reset with `docker compose down -v` when finished. Use `./scripts/utils/load-scenario.sh cleanup` to purge projects without destroying volumes.
 
 ## Configuration
-- Search parameters live in `config/search_parameters.yaml`, with defaults plus per-scenario overrides.
-- AI prompt templates reside under `config/prompts/` (`base_prompt.txt` plus posture-specific files).
-- Early stopping thresholds, iteration limits, and AI model overrides can be set via YAML and additional environment variables:
-  - `AI_MODEL` (default `gpt-4o-mini`)
-  - `AI_TEMPERATURE` (default `0.2`)
-  - `AI_MAX_OUTPUT_TOKENS` (default `900`)
-  - `AI_TIMEOUT_SECONDS` (default `12.0`)
+
+Search parameters live in `config/search_parameters.yaml`. Each scenario inherits the `default` block and may override individual keys:
+
+```yaml
+default:
+  max_iterations: 3
+  time_window_type: "weekly"
+  batch_size_per_iteration: 10
+  early_stopping_threshold: 5
+  search_order: "urgency_first"
+
+scenarios:
+  scenario1:
+    risk_tolerance: "conservative"
+    max_iterations: 2
+  scenario2:
+    risk_tolerance: "moderate"
+    early_stopping_threshold: 8
+  scenario3:
+    time_window_type: "priority_based"
+    search_order: "availability_first"
+```
+
+Prompt templates live under `config/prompts/`. The agent loads `base_prompt.txt` and appends the scenario posture file:
+
+```
+config/prompts/base_prompt.txt
+config/prompts/scenario1.txt   # Conservative posture overlay
+config/prompts/scenario2.txt   # Balanced posture overlay
+config/prompts/scenario3.txt   # Aggressive posture overlay
+```
+
+Each prompt file is plain text. A minimal scenario overlay can look like:
+
+```
+Scenario posture: Conservative.
+Minimize approval overhead and protect schedule commitments above all else.
+Recommend continuing search unless options meet strict compliance and risk thresholds.
+```
+
+Runtime knobs may also be supplied as environment variables (fallbacks shown in parentheses):
+- `AI_MODEL` (`gpt-4o-mini`)
+- `AI_TEMPERATURE` (`0.2`)
+- `AI_MAX_OUTPUT_TOKENS` (`900`)
+- `AI_TIMEOUT_SECONDS` (`12.0`)
+- `EARLY_STOPPING_THRESHOLD` (optional override of YAML value)
 
 ## Running the CLI
 ```bash
@@ -49,7 +88,18 @@ uv run python main.py --scenario scenario1
 Optional arguments:
 - `--config-dir` to point at an alternate configuration root
 
-The workflow loads failed shipments, iteratively fetches candidate accommodations, evaluates them with the AI agent, and prints a rich summary (Gate 4 implementation pending).
+The workflow loads failed shipments, iteratively fetches candidate accommodations, evaluates them with the AI agent, and prints a rich summary.
+
+Common launch patterns:
+
+- Override configuration directory:
+  ```bash
+  uv run python main.py --scenario scenario2 --config-dir ../custom-config
+  ```
+- Limit iterations from the command line:
+  ```bash
+  uv run python main.py --scenario scenario3 --max-iterations 1
+  ```
 
 ## Testing
 Unit tests (mocked AI + in-memory DB fakes):
@@ -72,6 +122,9 @@ uv run python -m mypy .
 ```
 
 ## Troubleshooting
-- **AI timeouts**: adjust `AI_TIMEOUT_SECONDS` in the environment or YAML.
-- **Empty recommendations**: verify scenarios are loaded and `early_stopping_threshold` is not overly aggressive.
+- **AI timeouts**: adjust `AI_TIMEOUT_SECONDS` or connect to a faster model tier.
+- **Empty recommendations**: ensure scenarios are loaded and `early_stopping_threshold` is not overly aggressive; rerun with `--max-iterations 3` to broaden search.
 - **Database auth failures**: confirm TLS paths in `postgres-scenarios/.env` and that `DATABASE_URL` matches the generated credentials.
+- **Missing prompts**: check the scenario file names under `config/prompts/` and confirm they match the `--scenario` argument.
+
+More scenarios are covered in `docs/CLI_TROUBLESHOOTING.md`.

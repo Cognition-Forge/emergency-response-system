@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from ai_agent import AccommodationAgent, load_prompt_templates
 from config import load_search_parameters
 from database import load_failed_items, load_inventory_by_iteration
+from openai import AsyncOpenAI
 
-DATABASE_URL = __import__("os").getenv("DATABASE_URL")
-if not DATABASE_URL:
+_database_url = os.getenv("DATABASE_URL")
+if not _database_url:
     pytest.skip("DATABASE_URL is required for live AI agent integration tests", allow_module_level=True)
+DATABASE_URL = cast(str, _database_url)
 
 
 @dataclass
@@ -95,7 +98,11 @@ async def test_live_agent_iteration_with_database() -> None:
         }
     )
 
-    agent = AccommodationAgent(config, _FakeOpenAI([iteration_payload, final_payload]), prompts)
+    agent = AccommodationAgent(
+        config,
+        cast(AsyncOpenAI, _FakeOpenAI([iteration_payload, final_payload])),
+        prompts,
+    )
 
     decision = await agent.evaluate_iteration(
         iteration_num=1,
@@ -109,4 +116,3 @@ async def test_live_agent_iteration_with_database() -> None:
     recommendation = await agent.final_recommendation()
     assert recommendation.primary_option.score == pytest.approx(8.5)
     assert recommendation.executive_summary.startswith("Deploy Regional Hub")
-

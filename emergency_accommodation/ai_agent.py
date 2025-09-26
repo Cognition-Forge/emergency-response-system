@@ -179,7 +179,7 @@ class AccommodationAgent:
         timeout = float(self._config.get("ai_timeout_seconds", 12.0))
         try:
             response = await asyncio.wait_for(
-                self._client.responses.create(
+                self._client.responses.create(  # type: ignore[arg-type,call-overload]
                     model=self._config.get("ai_model", "gpt-4o-mini"),
                     input=[
                         {"role": "system", "content": "You are an emergency accommodation strategist."},
