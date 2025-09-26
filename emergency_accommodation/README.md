@@ -8,6 +8,7 @@ AI-guided command-line workflow for triaging failed supply chain shipments and r
 - Local PostgreSQL stack from `postgres-scenarios/` (see below)
 - OpenAI API key exposed as `OPENAI_API_KEY`
 - TLS-enabled database URL exported as `DATABASE_URL` (e.g. `postgresql://user:pass@127.0.0.1:5432/materials_management`)
+- Recommended: copy `.env.example` to `.env` and populate the variables (the CLI auto-loads `.env` files via `python-dotenv`).
 
 ## Project Setup
 ```bash
@@ -78,6 +79,16 @@ Runtime knobs may also be supplied as environment variables (fallbacks shown in 
 - `AI_MAX_OUTPUT_TOKENS` (`900`)
 - `AI_TIMEOUT_SECONDS` (`12.0`)
 - `EARLY_STOPPING_THRESHOLD` (optional override of YAML value)
+- `LOG_LEVEL` (`INFO`)
+
+## Environment Setup
+The CLI automatically loads `.env` if present. A starter file is included:
+
+```bash
+cd emergency_accommodation
+cp .env.example .env
+# edit DATABASE_URL and OPENAI_API_KEY before running the CLI
+```
 
 ## Running the CLI
 ```bash

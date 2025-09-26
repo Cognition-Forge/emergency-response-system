@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator, Mapping
 
+from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
 from ai_agent import AIIntegrationError, AccommodationAgent, load_prompt_templates
@@ -153,6 +154,7 @@ def configure_logging() -> None:
 
 
 def main() -> None:
+    load_dotenv()
     configure_logging()
     args = parse_args()
 

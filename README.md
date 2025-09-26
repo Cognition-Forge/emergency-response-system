@@ -25,9 +25,10 @@ This repository demonstrates an AI-assisted emergency accommodation workflow bui
    ```
 4. Export runtime environment variables before launching the CLI:
    ```bash
-   export OPENAI_API_KEY=...           # real key for production runs; mocked in unit tests
-   export DATABASE_URL="postgresql://materials_admin:change_me@127.0.0.1:5432/materials_management"
+   cd emergency_accommodation
+   cp .env.example .env   # populate DATABASE_URL and OPENAI_API_KEY (loaded automatically)
    ```
+   *Alternatively, export the variables manually if you prefer not to store them in `.env`.*
 5. Run the emergency accommodation CLI:
    ```bash
    cd emergency_accommodation
