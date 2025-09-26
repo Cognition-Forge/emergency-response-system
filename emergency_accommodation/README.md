@@ -101,6 +101,8 @@ Common launch patterns:
   uv run python main.py --scenario scenario3 --max-iterations 1
   ```
 
+Architecture overviews are available in [`docs/emergency_accommodation_flowchart.md`](../docs/emergency_accommodation_flowchart.md).
+
 ## Testing
 Unit tests (mocked AI + in-memory DB fakes):
 ```bash

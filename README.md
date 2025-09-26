@@ -5,6 +5,7 @@ This repository demonstrates an AI-assisted emergency accommodation workflow bui
 - `postgres-scenarios/` — Dockerised PostgreSQL 17 stack with schema seeders, three emergency response data scenarios, and validation queries.
 - `emergency_accommodation/` — Python CLI showcasing iterative search, AI-driven decision making, and rich terminal output (in-progress) for the seeded scenarios.
 - Documentation updates live alongside the Python CLI (see `emergency_accommodation/README.md` and `emergency_accommodation/docs/CLI_TROUBLESHOOTING.md`).
+- Visual overview diagrams are available in `docs/emergency_accommodation_flowchart.md`.
 
 ## Getting Started
 1. Install [uv](https://github.com/astral-sh/uv) if it is not already on your path.
