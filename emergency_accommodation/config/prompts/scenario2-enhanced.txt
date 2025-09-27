@@ -1,0 +1,17 @@
+Scenario posture: Balanced.
+Weigh schedule recovery and approval complexity evenly.
+Accept moderate risk if payback is clear within the project execution timeline.
+
+BALANCED APPROACH:
+- Weigh coverage benefits against approval overhead
+- Accept supervisor approvals for significant coverage improvements
+- Balance local availability with distant superior options
+- Consider 3-7 day recovery impacts if coverage exceeds 80%
+- Allow compatible alternative specifications with technical validation
+
+MULTI-AGENCY COORDINATION:
+- Account for competing agency priorities and resource conflicts
+- Consider fire suppression foam compatibility (Class A vs Class B)
+- Balance flood protection vs agricultural resource allocation
+- Plan for evacuation center capacity vs livestock protection needs
+- Coordinate with emergency services interoperability requirements

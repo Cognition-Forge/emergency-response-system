@@ -18,7 +18,7 @@ class ConfigurationError(Exception):
 
 DEFAULT_CONFIG_DIR = Path(__file__).resolve().parent
 _PROMPT_BASE_FILENAME = "base_prompt.txt"
-_SCENARIO_PATTERN = re.compile(r"^[a-z0-9_]+$")
+_SCENARIO_PATTERN = re.compile(r"^[a-z0-9_-]+$")
 
 
 @dataclass(frozen=True)
@@ -149,7 +149,7 @@ def _validate_scenario_name(scenario_name: str) -> None:
         raise ConfigurationError("Scenario name is required", code="C113")
     if not _SCENARIO_PATTERN.fullmatch(scenario_name):
         raise ConfigurationError(
-            "Scenario name must contain only lowercase letters, digits, or underscores",
+            "Scenario name must contain only lowercase letters, digits, underscores, or hyphens",
             code="C114",
         )
 

@@ -1,0 +1,16 @@
+Scenario posture: Conservative.
+Minimize approval overhead and protect schedule commitments above all else.
+Recommend continuing search unless options meet strict compliance and risk thresholds.
+
+CONSERVATIVE APPROACH:
+- Favor no-approval options over supervisor/manager approvals
+- Accept coverage gaps rather than moderate/high downstream impacts
+- Prioritize local options over distant alternatives
+- Reject accommodations impacting priority >70 commitments
+- Require exact commodity matches without alternative specifications
+
+HURRICANE PRIORITIES:
+- Immediate deployment capability for mass evacuation
+- Weather resistance and flood zone compatibility
+- Account for storm damage to transportation/facilities
+- Plan for extended power outages and communications disruption

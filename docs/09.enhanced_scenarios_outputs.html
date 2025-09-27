@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Emergency Accommodation Analysis Logs</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            padding: 20px 30px;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .scenario-nav {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(45deg, #ffecd2, #fcb69f);
+            color: #333;
+            transform: scale(1.05);
+        }
+
+        .log-container {
+            padding: 30px;
+            max-height: 80vh;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #667eea #333;
+        }
+
+        .log-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .log-container::-webkit-scrollbar-track {
+            background: #333;
+        }
+
+        .log-container::-webkit-scrollbar-thumb {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border-radius: 4px;
+        }
+
+        .scenario-section {
+            display: none;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .scenario-section.active {
+            display: block;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .scenario-title {
+            color: #ffecd2;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            text-align: center;
+            padding: 10px;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 8px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        pre {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* ANSI Color Classes */
+        .ansi-black { color: #2e3440; }
+        .ansi-red { color: #bf616a; }
+        .ansi-green { color: #a3be8c; }
+        .ansi-yellow { color: #ebcb8b; }
+        .ansi-blue { color: #5e81ac; }
+        .ansi-magenta { color: #b48ead; }
+        .ansi-cyan { color: #88c0d0; }
+        .ansi-white { color: #e5e9f0; }
+        .ansi-bright-black { color: #4c566a; }
+        .ansi-bright-red { color: #d06f79; }
+        .ansi-bright-green { color: #a3be8c; }
+        .ansi-bright-yellow { color: #ebcb8b; }
+        .ansi-bright-blue { color: #5e81ac; }
+        .ansi-bright-magenta { color: #b48ead; }
+        .ansi-bright-cyan { color: #88c0d0; }
+        .ansi-bright-white { color: #eceff4; }
+        .ansi-bold { font-weight: bold; }
+        .ansi-dim { opacity: 0.7; }
+        .ansi-italic { font-style: italic; }
+        .ansi-underline { text-decoration: underline; }
+
+        /* Custom colors based on the log content */
+        .success-text { color: #a3be8c; }
+        .warning-text { color: #ebcb8b; }
+        .error-text { color: #bf616a; }
+        .info-text { color: #88c0d0; }
+        .highlight-text { color: #ffecd2; }
+        .secondary-text { color: #b48ead; }
+
+        .stats-box {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+        }
+
+        .stat-label {
+            display: block;
+            color: #88c0d0;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            display: block;
+            color: #ffecd2;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #88c0d0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚨 Enhanced Emergency Accommodation Analysis</h1>
+            <p>AI-Powered Resource Allocation & Risk Assessment Dashboard - Enhanced Scenarios</p>
+        </div>
+
+        <div class="scenario-nav">
+            <button class="nav-btn active" onclick="showScenario('scenario1')">Scenario 1 Enhanced</button>
+            <button class="nav-btn" onclick="showScenario('scenario2')">Scenario 2 Enhanced</button>
+            <button class="nav-btn" onclick="showScenario('scenario3')">Scenario 3 Enhanced</button>
+        </div>
+
+        <div class="log-container">
+            <div id="scenario1" class="scenario-section active">
+                <div class="scenario-title">📦 Scenario 1 Enhanced: Emergency Family Shelter Kit</div>
+                <div class="stats-box">
+                    <div class="stat-item">
+                        <span class="stat-label">Risk Tolerance</span>
+                        <span class="stat-value">Conservative</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Max Iterations</span>
+                        <span class="stat-value">2</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Search Order</span>
+                        <span class="stat-value">Urgency First</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Final Score</span>
+                        <span class="stat-value success-text">90.0</span>
+                    </div>
+                </div>
+                <pre><span class="success-text">✓ Starting emergency accommodation analysis for scenario1-enhanced</span>
+<span class="highlight-text">───────────────────────────────────────────────────────────── Scenario: scenario1-enhanced ─────────────────────────────────────────────────────────────</span>
+<span class="secondary-text">╭─────────────────────────────────────────────────────────────── Configuration ───────────────────────────────────────────────────────────────╮</span>
+<span class="secondary-text">│</span> Max Iterations        2                                                                                                                     <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Batch Size            15                                                                                                                    <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Early Stop Threshold  4                                                                                                                     <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Search Order          urgency_first                                                                                                         <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Time Window           weekly                                                                                                                <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Risk Tolerance        conservative                                                                                                          <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Approval Preference   minimize                                                                                                              <span class="secondary-text">│</span>
+<span class="secondary-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="highlight-text">───────────────────────────────────────────────────────────────── Iteration 1 ─────────────────────────────────────────────────────────────────</span>
+<span class="info-text">╭─────────────────────────────────────────────────────────────── AI Reasoning ────────────────────────────────────────────────────────────────╮</span>
+<span class="info-text">│</span> The available inventory options do not fully meet the critical needs for the failed shipments. While some items are available, they do not  <span class="info-text">│</span>
+<span class="info-text">│</span> meet the exact quantities required for immediate deployment. Continuing the search is necessary to find compliant options that can fulfill  <span class="info-text">│</span>
+<span class="info-text">│</span> the critical requirements without incurring delays or additional approvals. | Early stopping threshold met (4/4)                            <span class="info-text">│</span>
+<span class="info-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━┓
+┃<span class="secondary-text ansi-bold"> Rank </span>┃<span class="secondary-text ansi-bold"> Summary                                                                    </span>┃<span class="secondary-text ansi-bold"> Impact    </span>┃<span class="secondary-text ansi-bold"> Confidence </span>┃<span class="secondary-text ansi-bold"> Approvals </span>┃<span class="secondary-text ansi-bold"> Score </span>┃
+┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━┩
+│    1 │ Emergency Family Shelter Kit from Newcastle Regional Emergency Depot       │ <span class="success-text">No Impact</span> │        90% │ None      │  90.0 │
+│    2 │ Emergency Medical Supply Cache from Sydney Metropolitan Reserve            │ <span class="success-text">No Impact</span> │        85% │ None      │  85.0 │
+│    3 │ Portable Power Generation Unit 5kW from Newcastle Regional Emergency Depot │ <span class="success-text">No Impact</span> │        80% │ None      │  80.0 │
+│    4 │ Communications Equipment Package from Newcastle Regional Emergency Depot   │ <span class="success-text">No Impact</span> │        75% │ None      │  75.0 │
+└──────┴────────────────────────────────────────────────────────────────────────────┴───────────┴────────────┴───────────┴───────┘
+
+<span class="highlight-text">──────────────────────────────────────────────────────────── Final Recommendation ─────────────────────────────────────────────────────────────</span>
+<span class="success-text">╭──────────────────────────────── Primary Option ─────────────────────────────────╮</span>
+<span class="success-text">│</span> Summary    Emergency Family Shelter Kit from Newcastle Regional Emergency Depot <span class="success-text">│</span>
+<span class="success-text">│</span> Impact     <span class="success-text">No Impact                                                           </span> <span class="success-text">│</span>
+<span class="success-text">│</span> Confidence 90%                                                                  <span class="success-text">│</span>
+<span class="success-text">│</span> Approvals  None                                                                 <span class="success-text">│</span>
+<span class="success-text">│</span> Score      90.0                                                                 <span class="success-text">│</span>
+<span class="success-text">╰─────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="info-text">╭───────────────────────────────────────────────────────────── Executive Summary ─────────────────────────────────────────────────────────────╮</span>
+<span class="info-text">│</span> Due to failed shipments of critical emergency supplies, we have identified viable options to fulfill immediate needs. The Emergency Family  <span class="info-text">│</span>
+<span class="info-text">│</span> Shelter Kit from Newcastle Regional Emergency Depot is the top recommendation, with no impact and high confidence in availability. Other    <span class="info-text">│</span>
+<span class="info-text">│</span> alternatives include medical supplies, power generation units, and communications packages, all with no required approvals, ensuring rapid  <span class="info-text">│</span>
+<span class="info-text">│</span> deployment. Continuing the search is necessary for water purification systems, which remain insufficient in quantity.                       <span class="info-text">│</span>
+<span class="info-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="secondary-text">╭────────────────────────────────────────────────────────────── Risk Mitigation ──────────────────────────────────────────────────────────────╮</span>
+<span class="secondary-text">│</span> • Monitor inventory levels closely to ensure timely replenishment of critical supplies.                                                     <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> • Establish contingency plans for additional sourcing if current options are exhausted.                                                     <span class="secondary-text">│</span>
+<span class="secondary-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="info-text">╭─────────────────────────────────────────────────────────────── Alternatives ────────────────────────────────────────────────────────────────╮</span>
+<span class="info-text">│</span> ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┓                             <span class="info-text">│</span>
+<span class="info-text">│</span> ┃<span class="info-text ansi-bold"> Alternative                                                                </span>┃<span class="info-text ansi-bold"> Impact    </span>┃<span class="info-text ansi-bold"> Confidence </span>┃<span class="info-text ansi-bold"> Score </span>┃                             <span class="info-text">│</span>
+<span class="info-text">│</span> ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━┩                             <span class="info-text">│</span>
+<span class="info-text">│</span> │ Emergency Medical Supply Cache from Sydney Metropolitan Reserve            │ <span class="success-text">No Impact</span> │        85% │  85.0 │                             <span class="info-text">│</span>
+<span class="info-text">│</span> │ Portable Power Generation Unit 5kW from Newcastle Regional Emergency Depot │ <span class="success-text">No Impact</span> │        80% │  80.0 │                             <span class="info-text">│</span>
+<span class="info-text">│</span> │ Communications Equipment Package from Newcastle Regional Emergency Depot   │ <span class="success-text">No Impact</span> │        75% │  75.0 │                             <span class="info-text">│</span>
+<span class="info-text">│</span> └────────────────────────────────────────────────────────────────────────────┴───────────┴────────────┴───────┘                             <span class="info-text">│</span>
+<span class="info-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="success-text">✓ Accommodation analysis complete</span></pre>
+            </div>
+
+            <div id="scenario2" class="scenario-section">
+                <div class="scenario-title">🚜 Scenario 2 Enhanced: Emergency Livestock Feed</div>
+                <div class="stats-box">
+                    <div class="stat-item">
+                        <span class="stat-label">Risk Tolerance</span>
+                        <span class="stat-value">Moderate</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Max Iterations</span>
+                        <span class="stat-value">3</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Search Order</span>
+                        <span class="stat-value">Availability First</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Final Score</span>
+                        <span class="stat-value success-text">90.0</span>
+                    </div>
+                </div>
+                <pre><span class="success-text">✓ Starting emergency accommodation analysis for scenario2-enhanced</span>
+<span class="highlight-text">───────────────────────────────────────────────────────────── Scenario: scenario2-enhanced ─────────────────────────────────────────────────────────────</span>
+<span class="secondary-text">╭─────────────────────────────────────────────────────────────── Configuration ───────────────────────────────────────────────────────────────╮</span>
+<span class="secondary-text">│</span> Max Iterations        3                                                                                                                     <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Batch Size            12                                                                                                                    <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Early Stop Threshold  8                                                                                                                     <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Search Order          availability_first                                                                                                    <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Time Window           weekly                                                                                                                <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Risk Tolerance        moderate                                                                                                              <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Approval Preference   minimize                                                                                                              <span class="secondary-text">│</span>
+<span class="secondary-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="highlight-text">───────────────────────────────────────────────────────────────── Iteration 1 ─────────────────────────────────────────────────────────────────</span>
+<span class="info-text">╭─────────────────────────────────────────────────────────────── AI Reasoning ────────────────────────────────────────────────────────────────╮</span>
+<span class="info-text">│</span> The critical needs for emergency livestock feed, evacuation centers, and fire suppression foam have been assessed against available         <span class="info-text">│</span>
+<span class="info-text">│</span> inventory options. The recommended accommodations provide a balanced approach to meet immediate operational requirements while minimizing   <span class="info-text">│</span>
+<span class="info-text">│</span> approval overhead.                                                                                                                          <span class="info-text">│</span>
+<span class="info-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━┓
+┃<span class="secondary-text ansi-bold"> Rank </span>┃<span class="secondary-text ansi-bold"> Summary                                                                           </span>┃<span class="secondary-text ansi-bold"> Impact          </span>┃<span class="secondary-text ansi-bold"> Confidence </span>┃<span class="secondary-text ansi-bold"> Approvals </span>┃<span class="secondary-text ansi-bold"> Score </span>┃
+┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━┩
+│    1 │ Supply 10,000 KG of Emergency Livestock Feed from Tamworth Agricultural Hub.      │ <span class="success-text">No Impact      </span> │        90% │ None      │  90.0 │
+│    2 │ Deploy 80 Rapid Deployment Evacuation Centers from Wagga Wagga Emergency          │ <span class="success-text">No Impact      </span> │        85% │ None      │  85.0 │
+│      │ Logistics.                                                                        │                 │            │           │       │
+│    3 │ Utilize 9,500 L of Class A Foam Concentrate for Bushfire Suppression from Albury  │ <span class="warning-text">Moderate Impact</span> │        80% │ manager   │  80.0 │
+│      │ Border Emergency Facility.                                                        │                 │            │           │       │
+│    4 │ Supply 1,700 METRES of Portable Flood Barriers from Orange Agricultural Response  │ <span class="success-text">No Impact      </span> │        75% │ None      │  75.0 │
+│      │ Centre.                                                                           │                 │            │           │       │
+└──────┴───────────────────────────────────────────────────────────────────────────────────┴─────────────────┴────────────┴───────────┴───────┘
+
+<span class="highlight-text">──────────────────────────────────────────────────────────── Final Recommendation ─────────────────────────────────────────────────────────────</span>
+<span class="success-text">╭──────────────────────────────────── Primary Option ─────────────────────────────────────╮</span>
+<span class="success-text">│</span> Summary    Supply 10,000 KG of Emergency Livestock Feed from Tamworth Agricultural Hub. <span class="success-text">│</span>
+<span class="success-text">│</span> Impact     <span class="success-text">No Impact                                                                   </span> <span class="success-text">│</span>
+<span class="success-text">│</span> Confidence 90%                                                                          <span class="success-text">│</span>
+<span class="success-text">│</span> Approvals  None                                                                         <span class="success-text">│</span>
+<span class="success-text">│</span> Score      90.0                                                                         <span class="success-text">│</span>
+<span class="success-text">╰─────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="info-text">╭───────────────────────────────────────────────────────────── Executive Summary ─────────────────────────────────────────────────────────────╮</span>
+<span class="info-text">│</span> In response to the critical needs arising from recent shipment failures, we recommend the immediate supply of 10,000 KG of Emergency        <span class="info-text">│</span>
+<span class="info-text">│</span> Livestock Feed from the Tamworth Agricultural Hub. This option has a high confidence level (90%) and requires no approvals, ensuring rapid  <span class="info-text">│</span>
+<span class="info-text">│</span> deployment. Additionally, we propose deploying 80 Rapid Deployment Evacuation Centers from Wagga Wagga Emergency Logistics, also with no    <span class="info-text">│</span>
+<span class="info-text">│</span> approval requirements. For fire suppression needs, we can utilize 9,500 L of Class A Foam Concentrate from Albury Border Emergency          <span class="info-text">│</span>
+<span class="info-text">│</span> Facility, pending manager approval, which carries a moderate impact level. Lastly, 1,700 METRES of Portable Flood Barriers can be sourced   <span class="info-text">│</span>
+<span class="info-text">│</span> from Orange Agricultural Response Centre, also with no impact. This balanced approach addresses immediate operational requirements while    <span class="info-text">│</span>
+<span class="info-text">│</span> minimizing approval overhead and ensuring effective resource allocation.                                                                    <span class="info-text">│</span>
+<span class="info-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="secondary-text">╭────────────────────────────────────────────────────────────── Risk Mitigation ──────────────────────────────────────────────────────────────╮</span>
+<span class="secondary-text">│</span> • Monitor inventory levels closely to prevent future shortages.                                                                             <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> • Establish a rapid response protocol for critical supplies.                                                                                <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> • Coordinate with local agencies to streamline approval processes.                                                                          <span class="secondary-text">│</span>
+<span class="secondary-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="info-text">╭─────────────────────────────────────────────────────────────── Alternatives ────────────────────────────────────────────────────────────────╮</span>
+<span class="info-text">│</span> ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┓ <span class="info-text">│</span>
+<span class="info-text">│</span> ┃<span class="info-text ansi-bold"> Alternative                                                                                      </span>┃<span class="info-text ansi-bold"> Impact          </span>┃<span class="info-text ansi-bold"> Confidence </span>┃<span class="info-text ansi-bold"> Score </span>┃ <span class="info-text">│</span>
+<span class="info-text">│</span> ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━┩ <span class="info-text">│</span>
+<span class="info-text">│</span> │ Deploy 80 Rapid Deployment Evacuation Centers from Wagga Wagga Emergency Logistics.              │ <span class="success-text">No Impact      </span> │        85% │  85.0 │ <span class="info-text">│</span>
+<span class="info-text">│</span> │ Utilize 9,500 L of Class A Foam Concentrate for Bushfire Suppression from Albury Border          │ <span class="warning-text">Moderate Impact</span> │        80% │  80.0 │ <span class="info-text">│</span>
+<span class="info-text">│</span> │ Emergency Facility.                                                                              │                 │            │       │ <span class="info-text">│</span>
+<span class="info-text">│</span> │ Supply 1,700 METRES of Portable Flood Barriers from Orange Agricultural Response Centre.         │ <span class="success-text">No Impact      </span> │        75% │  75.0 │ <span class="info-text">│</span>
+<span class="info-text">│</span> └──────────────────────────────────────────────────────────────────────────────────────────────────┴─────────────────┴────────────┴───────┘ <span class="info-text">│</span>
+<span class="info-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="success-text">✓ Accommodation analysis complete</span></pre>
+            </div>
+
+            <div id="scenario3" class="scenario-section">
+                <div class="scenario-title">⚡ Scenario 3 Enhanced: Emergency Power Generation System</div>
+                <div class="stats-box">
+                    <div class="stat-item">
+                        <span class="stat-label">Risk Tolerance</span>
+                        <span class="stat-value">Aggressive</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Max Iterations</span>
+                        <span class="stat-value">3</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Search Order</span>
+                        <span class="stat-value">Availability First</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Final Score</span>
+                        <span class="stat-value success-text">90.0</span>
+                    </div>
+                </div>
+                <pre><span class="success-text">✓ Starting emergency accommodation analysis for scenario3-enhanced</span>
+<span class="highlight-text">───────────────────────────────────────────────────────────── Scenario: scenario3-enhanced ─────────────────────────────────────────────────────────────</span>
+<span class="secondary-text">╭─────────────────────────────────────────────────────────────── Configuration ───────────────────────────────────────────────────────────────╮</span>
+<span class="secondary-text">│</span> Max Iterations        3                                                                                                                     <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Batch Size            15                                                                                                                    <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Early Stop Threshold  5                                                                                                                     <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Search Order          availability_first                                                                                                    <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Time Window           priority_based                                                                                                        <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Risk Tolerance        aggressive                                                                                                            <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> Approval Preference   accept_higher                                                                                                         <span class="secondary-text">│</span>
+<span class="secondary-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="highlight-text">───────────────────────────────────────────────────────────────── Iteration 1 ─────────────────────────────────────────────────────────────────</span>
+<span class="info-text">╭─────────────────────────────────────────────────────────────── AI Reasoning ────────────────────────────────────────────────────────────────╮</span>
+<span class="info-text">│</span> The critical items required for immediate response are available with sufficient quantities across multiple warehouses. The selected        <span class="info-text">│</span>
+<span class="info-text">│</span> options provide the necessary coverage to mitigate risks associated with the failed shipments. Given the aggressive approach, we prioritize <span class="info-text">│</span>
+<span class="info-text">│</span> immediate recovery over potential downstream impacts.                                                                                       <span class="info-text">│</span>
+<span class="info-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━┓
+┃<span class="secondary-text ansi-bold"> Rank </span>┃<span class="secondary-text ansi-bold"> Summary                                                                                </span>┃<span class="secondary-text ansi-bold"> Impact   </span>┃<span class="secondary-text ansi-bold"> Confidence </span>┃<span class="secondary-text ansi-bold"> Approvals </span>┃<span class="secondary-text ansi-bold"> Score </span>┃
+┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━┩
+│    1 │ Emergency Communications Network - Metropolitan Scale from Melbourne Strategic Reserve │ <span class="error-text">Critical</span> │        90% │ executive │  85.0 │
+│    2 │ Emergency Power Generation System - 500kW Grid Tie from Melbourne Strategic Reserve    │ <span class="error-text">Critical</span> │        95% │ executive │  90.0 │
+│    3 │ Urban Search & Rescue Equipment Package - Heavy from Melbourne Strategic Reserve       │ <span class="error-text">Critical</span> │        90% │ executive │  88.0 │
+│    4 │ Mobile Emergency Hospital Unit - Level 1 Trauma from Brisbane Emergency Command        │ <span class="error-text">Critical</span> │        90% │ executive │  87.0 │
+│    5 │ Metropolitan Water Treatment Plant - Portable from Darwin Strategic Assets             │ <span class="error-text">Critical</span> │        85% │ executive │  84.0 │
+└──────┴────────────────────────────────────────────────────────────────────────────────────────┴──────────┴────────────┴───────────┴───────┘
+
+<span class="highlight-text">──────────────────────────────────────────────────────────── Final Recommendation ─────────────────────────────────────────────────────────────</span>
+<span class="success-text">╭──────────────────────────────────────── Primary Option ────────────────────────────────────────╮</span>
+<span class="success-text">│</span> Summary    Emergency Power Generation System - 500kW Grid Tie from Melbourne Strategic Reserve <span class="success-text">│</span>
+<span class="success-text">│</span> Impact     <span class="error-text">Critical                                                                           </span> <span class="success-text">│</span>
+<span class="success-text">│</span> Confidence 95%                                                                                 <span class="success-text">│</span>
+<span class="success-text">│</span> Approvals  executive                                                                           <span class="success-text">│</span>
+<span class="success-text">│</span> Score      90.0                                                                                <span class="success-text">│</span>
+<span class="success-text">╰────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="info-text">╭───────────────────────────────────────────────────────────── Executive Summary ─────────────────────────────────────────────────────────────╮</span>
+<span class="info-text">│</span> In response to the critical failures in shipment for emergency resources, we have identified viable options that ensure immediate recovery  <span class="info-text">│</span>
+<span class="info-text">│</span> and operational capability. The Emergency Power Generation System from Melbourne Strategic Reserve is prioritized due to its high           <span class="info-text">│</span>
+<span class="info-text">│</span> confidence score and critical impact level, despite requiring immediate logistics for deployment. Other critical resources such as the      <span class="info-text">│</span>
+<span class="info-text">│</span> Emergency Communications Network and Urban Search & Rescue Equipment are also available, albeit with some limitations in quantity and       <span class="info-text">│</span>
+<span class="info-text">│</span> deployment requirements. Approvals from executives are necessary for all options, emphasizing the urgency of the situation and the need for <span class="info-text">│</span>
+<span class="info-text">│</span> rapid decision-making to mitigate risks effectively.                                                                                        <span class="info-text">│</span>
+<span class="info-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="secondary-text">╭────────────────────────────────────────────────────────────── Risk Mitigation ──────────────────────────────────────────────────────────────╮</span>
+<span class="secondary-text">│</span> • Ensure rapid logistics for deployment of power generation systems.                                                                        <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> • Coordinate with local agencies for personnel support during deployment of rescue equipment.                                               <span class="secondary-text">│</span>
+<span class="secondary-text">│</span> • Prepare operational training for water treatment plant setup.                                                                             <span class="secondary-text">│</span>
+<span class="secondary-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="info-text">╭─────────────────────────────────────────────────────────────── Alternatives ────────────────────────────────────────────────────────────────╮</span>
+<span class="info-text">│</span> ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━┓                  <span class="info-text">│</span>
+<span class="info-text">│</span> ┃<span class="info-text ansi-bold"> Alternative                                                                            </span>┃<span class="info-text ansi-bold"> Impact   </span>┃<span class="info-text ansi-bold"> Confidence </span>┃<span class="info-text ansi-bold"> Score </span>┃                  <span class="info-text">│</span>
+<span class="info-text">│</span> ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━┩                  <span class="info-text">│</span>
+<span class="info-text">│</span> │ Emergency Communications Network - Metropolitan Scale from Melbourne Strategic Reserve │ <span class="error-text">Critical</span> │        90% │  85.0 │                  <span class="info-text">│</span>
+<span class="info-text">│</span> │ Urban Search & Rescue Equipment Package - Heavy from Melbourne Strategic Reserve       │ <span class="error-text">Critical</span> │        90% │  88.0 │                  <span class="info-text">│</span>
+<span class="info-text">│</span> │ Mobile Emergency Hospital Unit - Level 1 Trauma from Brisbane Emergency Command        │ <span class="error-text">Critical</span> │        90% │  87.0 │                  <span class="info-text">│</span>
+<span class="info-text">│</span> │ Metropolitan Water Treatment Plant - Portable from Darwin Strategic Assets             │ <span class="error-text">Critical</span> │        85% │  84.0 │                  <span class="info-text">│</span>
+<span class="info-text">│</span> └────────────────────────────────────────────────────────────────────────────────────────┴──────────┴────────────┴───────┘                  <span class="info-text">│</span>
+<span class="info-text">╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</span>
+
+<span class="success-text">✓ Accommodation analysis complete</span></pre>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Generated from Enhanced Emergency Accommodation Analysis Logs | AI-Powered Resource Management System</p>
+        </div>
+    </div>
+
+    <script>
+        function showScenario(scenarioId) {
+            // Hide all scenario sections
+            const sections = document.querySelectorAll('.scenario-section');
+            sections.forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // Remove active class from all nav buttons
+            const buttons = document.querySelectorAll('.nav-btn');
+            buttons.forEach(button => {
+                button.classList.remove('active');
+            });
+
+            // Show the selected scenario
+            const selectedSection = document.getElementById(scenarioId);
+            if (selectedSection) {
+                selectedSection.classList.add('active');
+            }
+
+            // Add active class to the clicked button
+            const activeButton = Array.from(buttons).find(btn =>
+                btn.textContent.toLowerCase().includes(scenarioId.toLowerCase())
+            );
+            if (activeButton) {
+                activeButton.classList.add('active');
+            }
+        }
+
+        // Initialize with scenario1 active
+        document.addEventListener('DOMContentLoaded', function() {
+            showScenario('scenario1');
+        });
+    </script>
+</body>
+</html>

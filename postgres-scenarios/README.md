@@ -29,10 +29,13 @@ Available datasets:
 - `scenario1-simple.sql` – direct match with surplus inventory.
 - `scenario2-conflict.sql` – medium-priority reservations that can be reassigned.
 - `scenario3-critical.sql` – depleted stockpile requiring executive approval.
+- `scenario1-enhanced.sql` – hurricane-scale response with multi-commodity shortages and geographic distribution.
+- `scenario2-enhanced.sql` – regional multi-hazard event with competing agency priorities and cascading coverage gaps.
+- `scenario3-enhanced.sql` – metropolitan infrastructure collapse with executive-level trade-offs.
 
 Reuse `scripts/scenarios/cleanup.sql` when you need to purge all three projects without destroying the Docker volume.
 
-Shortcut: `scripts/utils/load-scenario.sh` reads `.env` and runs the correct SQL file.
+Shortcut: `scripts/utils/load-scenario.sh` reads `.env` and runs the correct SQL file. It accepts friendly aliases (`1`, `2`, `3`, `1e`, `2e`, `3e`, `cleanup`).
 
 ```bash
 ./scripts/utils/load-scenario.sh scenario2

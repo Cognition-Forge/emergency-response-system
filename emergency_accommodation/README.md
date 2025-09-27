@@ -1,6 +1,6 @@
 # Emergency Accommodation CLI
 
-AI-guided command-line workflow for triaging failed supply chain shipments and recommending accommodation plans across three seeded project scenarios.
+AI-guided command-line workflow for triaging failed supply chain shipments and recommending accommodation plans across the baseline and enhanced demo scenarios.
 
 ## Prerequisites
 - Python 3.11+
@@ -28,6 +28,10 @@ docker compose up -d
 ./scripts/utils/load-scenario.sh scenario1
 ./scripts/utils/load-scenario.sh scenario2
 ./scripts/utils/load-scenario.sh scenario3
+# optional large-scale datasets
+./scripts/utils/load-scenario.sh scenario1-enhanced
+./scripts/utils/load-scenario.sh scenario2-enhanced
+./scripts/utils/load-scenario.sh scenario3-enhanced
 ```
 
 Stop and reset with `docker compose down -v` when finished. Use `./scripts/utils/load-scenario.sh cleanup` to purge projects without destroying volumes.
@@ -43,6 +47,7 @@ default:
   batch_size_per_iteration: 10
   early_stopping_threshold: 5
   search_order: "urgency_first"
+  ai_timeout_seconds: 30
 
 scenarios:
   scenario1:
@@ -54,15 +59,38 @@ scenarios:
   scenario3:
     time_window_type: "priority_based"
     search_order: "availability_first"
+  scenario1-enhanced:
+    risk_tolerance: "conservative"
+    approval_preference: "minimize"
+    max_iterations: 2
+    early_stopping_threshold: 4
+    batch_size_per_iteration: 15
+  scenario2-enhanced:
+    risk_tolerance: "moderate"
+    approval_preference: "minimize"
+    max_iterations: 3
+    batch_size_per_iteration: 12
+    early_stopping_threshold: 8
+    search_order: "availability_first"
+  scenario3-enhanced:
+    risk_tolerance: "aggressive"
+    approval_preference: "accept_higher"
+    max_iterations: 3
+    batch_size_per_iteration: 15
+    search_order: "availability_first"
+    time_window_type: "priority_based"
 ```
 
 Prompt templates live under `config/prompts/`. The agent loads `base_prompt.txt` and appends the scenario posture file:
 
 ```
 config/prompts/base_prompt.txt
-config/prompts/scenario1.txt   # Conservative posture overlay
-config/prompts/scenario2.txt   # Balanced posture overlay
-config/prompts/scenario3.txt   # Aggressive posture overlay
+config/prompts/scenario1.txt           # Conservative posture overlay
+config/prompts/scenario2.txt           # Balanced posture overlay
+config/prompts/scenario3.txt           # Aggressive posture overlay
+config/prompts/scenario1-enhanced.txt  # Conservative hurricane response expertise
+config/prompts/scenario2-enhanced.txt  # Balanced multi-hazard coordination
+config/prompts/scenario3-enhanced.txt  # Aggressive executive decision framing
 ```
 
 Each prompt file is plain text. A minimal scenario overlay can look like:
@@ -77,7 +105,7 @@ Runtime knobs may also be supplied as environment variables (fallbacks shown in 
 - `AI_MODEL` (`gpt-4o-mini`)
 - `AI_TEMPERATURE` (`0.2`)
 - `AI_MAX_OUTPUT_TOKENS` (`900`)
-- `AI_TIMEOUT_SECONDS` (`12.0`)
+- `AI_TIMEOUT_SECONDS` (`30.0`)
 - `EARLY_STOPPING_THRESHOLD` (optional override of YAML value)
 - `LOG_LEVEL` (`INFO`)
 

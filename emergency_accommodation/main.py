@@ -37,9 +37,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--scenario",
-        choices=["scenario1", "scenario2", "scenario3"],
+        choices=["scenario1", "scenario2", "scenario3", "scenario1-enhanced", "scenario2-enhanced", "scenario3-enhanced"],
         required=True,
-        help="Scenario to analyze (scenario1=conservative, scenario2=balanced, scenario3=aggressive)",
+        help="Scenario to analyze (scenario1=conservative, scenario2=balanced, scenario3=aggressive, enhanced=realistic scale)",
     )
     parser.add_argument(
         "--config-dir",

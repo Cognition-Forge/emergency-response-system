@@ -10,9 +10,12 @@ usage() {
 Usage: $(basename "$0") <scenario>
 
 Scenarios:
-  1 | scenario1 | simple      Load scenario1-simple.sql
-  2 | scenario2 | conflict    Load scenario2-conflict.sql
-  3 | scenario3 | critical    Load scenario3-critical.sql
+  1 | scenario1 | simple      Load scenario1-simple.sql (basic 20-item demo)
+  2 | scenario2 | conflict    Load scenario2-conflict.sql (multi-agency conflicts)
+  3 | scenario3 | critical    Load scenario3-critical.sql (critical infrastructure)
+  1e | scenario1-enhanced     Load scenario1-enhanced.sql (hurricane response, 2500+ items)
+  2e | scenario2-enhanced     Load scenario2-enhanced.sql (multi-hazard, competing priorities)
+  3e | scenario3-enhanced     Load scenario3-enhanced.sql (earthquake, executive decisions)
   cleanup                     Run cleanup.sql (removes all scenario projects)
 
 Environment:
@@ -36,6 +39,15 @@ case "$SCENARIO_KEY" in
     ;;
   3|scenario3|critical)
     SQL_FILE="scenario3-critical.sql"
+    ;;
+  1e|scenario1-enhanced)
+    SQL_FILE="scenario1-enhanced.sql"
+    ;;
+  2e|scenario2-enhanced)
+    SQL_FILE="scenario2-enhanced.sql"
+    ;;
+  3e|scenario3-enhanced)
+    SQL_FILE="scenario3-enhanced.sql"
     ;;
   cleanup)
     SQL_FILE="cleanup.sql"

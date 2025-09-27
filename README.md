@@ -2,7 +2,7 @@
 
 This repository demonstrates an AI-assisted emergency accommodation workflow built on top of a deterministic PostgreSQL sandbox. It is organised around ticket specifications in `specs/` and split into two primary components:
 
-- `postgres-scenarios/` — Dockerised PostgreSQL 17 stack with schema seeders, three emergency response data scenarios, and validation queries.
+- `postgres-scenarios/` — Dockerised PostgreSQL 17 stack with schema seeders, three baseline emergency response scenarios plus enhanced large-scale variants, and validation queries.
 - `emergency_accommodation/` — Python CLI showcasing iterative search, AI-driven decision making (now powered by the OpenAI Agents SDK), and rich terminal output for the seeded scenarios.
 - Documentation updates live alongside the Python CLI (see `emergency_accommodation/README.md` and `emergency_accommodation/docs/CLI_TROUBLESHOOTING.md`).
 - Visual overview diagrams are available in `docs/emergency_accommodation_flowchart.md`.
@@ -22,6 +22,10 @@ This repository demonstrates an AI-assisted emergency accommodation workflow bui
    ./scripts/utils/load-scenario.sh scenario1
    ./scripts/utils/load-scenario.sh scenario2
    ./scripts/utils/load-scenario.sh scenario3
+   # optional large-scale datasets
+   ./scripts/utils/load-scenario.sh scenario1-enhanced
+   ./scripts/utils/load-scenario.sh scenario2-enhanced
+   ./scripts/utils/load-scenario.sh scenario3-enhanced
    ```
 4. Export runtime environment variables before launching the CLI:
    ```bash
@@ -53,7 +57,7 @@ Refer to `AGENTS.md` or `CLAUDE.md` for contributor workflow conventions.
 
 ## Maintenance Notes
 - Keep `.env` outside version control and regenerate TLS certs in `postgres-scenarios/certs/` when rotating credentials.
-- The AI agent defaults to conservative timeouts (12s) and early stopping thresholds configurable through YAML or environment variables.
+- The AI agent defaults to a 30s timeout and configurable early stopping thresholds via YAML or environment variables.
 - `docker compose down -v` resets the database; `./scripts/utils/load-scenario.sh cleanup` removes scenario data while retaining volumes.
 
 For detailed ticket requirements, consult `specs/FEAT-002-emergency-response/`. Multiple gates remain in progress—refer to the task tracker for the latest status.

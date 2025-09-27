@@ -11,7 +11,7 @@
 
 ## Build, Test, and Development Commands
 - `docker compose up -d` (run inside `postgres-scenarios/`): starts Postgres 17 with schema init.
-- `./scripts/utils/load-scenario.sh <scenario>`: seeds demo data (`scenario1|scenario2|scenario3|cleanup`).
+- `./scripts/utils/load-scenario.sh <scenario>`: seeds demo data (`scenario1|scenario2|scenario3|scenario1-enhanced|scenario2-enhanced|scenario3-enhanced|cleanup`).
 - `PGPASSWORD=… psql ... -f scripts/queries/validation-checks.sql`: validates scenario coverage and search results.
 - `docker compose down -v`: tears down stack and purges volumes for a clean rebuild.
 - `uv sync` (run inside `emergency_accommodation/`): installs CLI dependencies into `.venv/`.
@@ -27,7 +27,7 @@
 - Validation relies on the helper SQL under `scripts/queries/`; load all three scenarios before running checks.
 - Manual verification: run `validation-checks.sql` then `accommodation-analysis.sql` to confirm `fn_emergency_inventory_search` outputs expected impact levels.
 - When adding scenario data, include deterministic UUIDs and expand validation queries with matching expectations.
-- AI agent tests mock OpenAI responses; live suites require exporting `OPENAI_API_KEY` and `DATABASE_URL`. Timeout behaviour defaults to 12s—tune with `AI_TIMEOUT_SECONDS` if needed.
+- AI agent tests mock OpenAI responses; live suites require exporting `OPENAI_API_KEY` and `DATABASE_URL`. Timeout behaviour defaults to 30s—tune with `AI_TIMEOUT_SECONDS` if needed.
 
 ## Documentation
 - Project-specific instructions are maintained in `emergency_accommodation/README.md`; update it when workflows or required environment variables change.

@@ -14,6 +14,9 @@ _SCENARIO_METADATA: dict[str, dict[str, str]] = {
     "scenario1": {"project_name": "Scenario 1 - Coastal Relief"},
     "scenario2": {"project_name": "Scenario 2 - Regional Reassignment"},
     "scenario3": {"project_name": "Scenario 3 - Metropolitan Critical"},
+    "scenario1-enhanced": {"project_name": "Enhanced Scenario 1 - Hurricane Evacuation Response"},
+    "scenario2-enhanced": {"project_name": "Enhanced Scenario 2 - Regional Multi-Hazard Response"},
+    "scenario3-enhanced": {"project_name": "Enhanced Scenario 3 - Metropolitan Infrastructure Collapse"},
 }
 
 _FAILED_ITEMS_QUERY = """
