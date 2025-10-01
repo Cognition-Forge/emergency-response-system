@@ -32,13 +32,13 @@ scenarios:
     risk_tolerance: "conservative"
     approval_preference: "minimize"
     max_iterations: 2
-    early_stopping_threshold: 4
+    early_stopping_threshold: 8
     batch_size_per_iteration: 15
     search_order: "urgency_first"
   scenario2-enhanced:
     risk_tolerance: "moderate"
     approval_preference: "minimize"
-    early_stopping_threshold: 8
+    early_stopping_threshold: 15
     max_iterations: 3
     batch_size_per_iteration: 12
     search_order: "availability_first"
@@ -47,5 +47,6 @@ scenarios:
     approval_preference: "accept_higher"
     max_iterations: 3
     batch_size_per_iteration: 15
+    early_stopping_threshold: 12
     search_order: "availability_first"
     time_window_type: "priority_based"
