@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import sys
+import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Awaitable, Callable, Mapping, Sequence
 
 from agents import Agent, Runner, model_settings
 from agents.run import RunConfig
@@ -74,6 +78,77 @@ class _FinalRecommendationPayload(BaseModel):
     risk_mitigation: list[str] = Field(default_factory=list)
 
 
+async def _log_llm_call(
+    agent_name: str,
+    model: str,
+    instructions: str,
+    payload: str,
+    settings: dict[str, Any],
+    runner_coro: Callable[[], Awaitable[Any]],
+) -> Any:
+    """Wrapper that logs LLM calls if LOG_LLM_CALLS=true."""
+    # Check if logging is enabled
+    if os.getenv("LOG_LLM_CALLS", "false").lower() != "true":
+        return await runner_coro()
+
+    # Prepare log directory (relative to working directory)
+    log_dir = Path("logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "llm_calls.jsonl"
+
+    # Capture request metadata
+    request_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    start_time = time.perf_counter()
+
+    # Execute the LLM call
+    result = None
+    error = None
+    try:
+        result = await runner_coro()
+    except Exception as exc:
+        error = str(exc)
+        raise
+    finally:
+        # Capture response metadata
+        end_time = time.perf_counter()
+        duration_ms = int((end_time - start_time) * 1000)
+        response_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        # Build log entry
+        output_data = None
+        if result is not None and hasattr(result, "final_output"):
+            final_output = result.final_output
+            if final_output is not None:
+                output_data = final_output.model_dump() if hasattr(final_output, "model_dump") else final_output
+
+        log_entry = {
+            "timestamp": request_timestamp,
+            "agent": agent_name,
+            "model": model,
+            "request": {
+                "instructions": instructions,
+                "payload": payload,
+                "settings": settings,
+            },
+            "response": {
+                "timestamp": response_timestamp,
+                "duration_ms": duration_ms,
+                "output": output_data,
+                "error": error,
+            },
+        }
+
+        # Write to log file (graceful failure)
+        try:
+            with log_file.open("a", encoding="utf-8") as f:
+                json.dump(log_entry, f, ensure_ascii=False)
+                f.write("\n")
+        except Exception as log_error:
+            print(f"Failed to write LLM log: {log_error}", file=sys.stderr)
+
+    return result
+
+
 class AccommodationAgent:
     """Drives AI-assisted decision making for emergency accommodations."""
 
@@ -120,10 +195,20 @@ class AccommodationAgent:
         timeout = float(self._config.get("ai_timeout_seconds", 12.0))
         try:
             result = await asyncio.wait_for(
-                Runner.run(
-                    iteration_agent,
-                    payload,
-                    run_config=self._build_run_config(),
+                _log_llm_call(
+                    agent_name="Iteration Evaluator",
+                    model=self._config.get("ai_model", "gpt-4o-mini"),
+                    instructions=template.combined,
+                    payload=payload,
+                    settings={
+                        "temperature": float(self._config.get("ai_temperature", 0.2)),
+                        "max_tokens": int(self._config.get("ai_max_output_tokens", 900)),
+                    },
+                    runner_coro=lambda: Runner.run(
+                        iteration_agent,
+                        payload,
+                        run_config=self._build_run_config(),
+                    ),
                 ),
                 timeout=timeout,
             )
@@ -169,10 +254,20 @@ class AccommodationAgent:
         timeout = float(self._config.get("ai_timeout_seconds", 12.0))
         try:
             result = await asyncio.wait_for(
-                Runner.run(
-                    final_agent,
-                    payload,
-                    run_config=self._build_run_config(),
+                _log_llm_call(
+                    agent_name="Final Recommender",
+                    model=self._config.get("ai_model", "gpt-4o-mini"),
+                    instructions=template.combined,
+                    payload=payload,
+                    settings={
+                        "temperature": float(self._config.get("ai_temperature", 0.2)),
+                        "max_tokens": int(self._config.get("ai_max_output_tokens", 900)),
+                    },
+                    runner_coro=lambda: Runner.run(
+                        final_agent,
+                        payload,
+                        run_config=self._build_run_config(),
+                    ),
                 ),
                 timeout=timeout,
             )

@@ -108,6 +108,7 @@ Runtime knobs may also be supplied as environment variables (fallbacks shown in 
 - `AI_TIMEOUT_SECONDS` (`30.0`)
 - `EARLY_STOPPING_THRESHOLD` (optional override of YAML value)
 - `LOG_LEVEL` (`INFO`)
+- `LOG_LLM_CALLS` (`false`) — set to `true` to log full LLM request/response payloads to `logs/llm_calls.jsonl` for debugging
 
 ## Environment Setup
 The CLI automatically loads `.env` if present. A starter file is included:
@@ -144,9 +145,10 @@ Architecture overviews are available in [`docs/emergency_accommodation_flowchart
 
 ## AI Agent Internals
 - The CLI now relies on the OpenAI Agents SDK (`openai-agents`) to evaluate each iteration and produce a final recommendation.
-- Prompt text files are merged into the Agent’s `instructions`, while iteration payloads (failed items + candidate inventory) are passed as JSON.
+- Prompt text files are merged into the Agent's `instructions`, while iteration payloads (failed items + candidate inventory) are passed as JSON.
 - Structured outputs from the Agent are parsed into the existing domain models (`IterationDecision`, `FinalRecommendation`), so downstream display logic remains unchanged.
 - Timeout, temperature, and token limits are still controlled through YAML/env overrides listed above.
+- **LLM Call Logging**: Set `LOG_LLM_CALLS=true` to capture complete request/response payloads in JSON Lines format at `logs/llm_calls.jsonl`. This is useful for debugging agent behavior, analyzing performance, or estimating token usage. Logging uses stdlib only and fails gracefully if disk write errors occur.
 
 ## Testing
 Unit tests (mocked AI + in-memory DB fakes):
@@ -173,5 +175,6 @@ uv run python -m mypy .
 - **Empty recommendations**: ensure scenarios are loaded and `early_stopping_threshold` is not overly aggressive; rerun with `--max-iterations 3` to broaden search.
 - **Database auth failures**: confirm TLS paths in `postgres-scenarios/.env` and that `DATABASE_URL` matches the generated credentials.
 - **Missing prompts**: check the scenario file names under `config/prompts/` and confirm they match the `--scenario` argument.
+- **Debugging AI decisions**: enable `LOG_LLM_CALLS=true` to capture full LLM request/response payloads in `logs/llm_calls.jsonl`. Parse with `jq` or Python's json module to inspect what prompts were sent and what the agent returned.
 
 More scenarios are covered in `docs/CLI_TROUBLESHOOTING.md`.

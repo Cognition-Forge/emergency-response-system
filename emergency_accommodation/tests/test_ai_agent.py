@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -158,3 +161,109 @@ async def test_agent_failure_propagates(monkeypatch: pytest.MonkeyPatch) -> None
             scenario_name="scenario1",
         )
     assert exc.value.code == "I307"
+
+
+@pytest.mark.asyncio
+async def test_llm_logging_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify log file created and contains expected fields when LOG_LLM_CALLS=true."""
+    runner_stub = _RunnerStub([_iteration_payload()])
+    monkeypatch.setattr("ai_agent.Runner.run", runner_stub)
+    monkeypatch.setenv("LOG_LLM_CALLS", "true")
+
+    # Override log directory to tmp_path
+    log_file = tmp_path / "llm_calls.jsonl"
+    monkeypatch.setattr("ai_agent.Path", lambda x: tmp_path if x == "logs" else Path(x))
+
+    templates = load_prompt_templates()
+    config = load_search_parameters("scenario1")
+    agent = AccommodationAgent(config, openai_client=None, prompt_templates=templates)  # type: ignore[arg-type]
+
+    await agent.evaluate_iteration(
+        iteration_num=1,
+        inventory_batch=[_inventory_option()],
+        failed_items=[_failed_item()],
+        scenario_name="scenario1",
+    )
+
+    # Verify log file exists
+    assert log_file.exists(), "Log file should be created when LOG_LLM_CALLS=true"
+
+    # Verify log entry structure
+    log_content = log_file.read_text()
+    log_entry = json.loads(log_content.strip())
+
+    # Verify required fields from AC-002 and AC-003
+    assert "timestamp" in log_entry
+    assert "agent" in log_entry
+    assert log_entry["agent"] == "Iteration Evaluator"
+    assert "model" in log_entry
+    assert "request" in log_entry
+    assert "instructions" in log_entry["request"]
+    assert "payload" in log_entry["request"]
+    assert "settings" in log_entry["request"]
+    assert "temperature" in log_entry["request"]["settings"]
+    assert "max_tokens" in log_entry["request"]["settings"]
+    assert "response" in log_entry
+    assert "timestamp" in log_entry["response"]
+    assert "duration_ms" in log_entry["response"]
+    assert "output" in log_entry["response"]
+    assert "error" in log_entry["response"]
+
+
+@pytest.mark.asyncio
+async def test_llm_logging_disabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify no log file created when LOG_LLM_CALLS is false or unset."""
+    runner_stub = _RunnerStub([_iteration_payload()])
+    monkeypatch.setattr("ai_agent.Runner.run", runner_stub)
+    monkeypatch.setenv("LOG_LLM_CALLS", "false")
+
+    log_file = tmp_path / "llm_calls.jsonl"
+    monkeypatch.setattr("ai_agent.Path", lambda x: tmp_path if x == "logs" else Path(x))
+
+    templates = load_prompt_templates()
+    config = load_search_parameters("scenario1")
+    agent = AccommodationAgent(config, openai_client=None, prompt_templates=templates)  # type: ignore[arg-type]
+
+    await agent.evaluate_iteration(
+        iteration_num=1,
+        inventory_batch=[_inventory_option()],
+        failed_items=[_failed_item()],
+        scenario_name="scenario1",
+    )
+
+    # Verify log file was NOT created
+    assert not log_file.exists(), "Log file should not be created when LOG_LLM_CALLS=false"
+
+
+@pytest.mark.asyncio
+async def test_llm_logging_failure_does_not_crash(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Verify logging failure doesn't crash LLM call - graceful degradation."""
+    runner_stub = _RunnerStub([_iteration_payload()])
+    monkeypatch.setattr("ai_agent.Runner.run", runner_stub)
+    monkeypatch.setenv("LOG_LLM_CALLS", "true")
+
+    # Make log directory read-only to force write failure
+    log_dir = tmp_path / "readonly_logs"
+    log_dir.mkdir()
+    log_dir.chmod(0o444)  # Read-only
+    monkeypatch.setattr("ai_agent.Path", lambda x: log_dir if x == "logs" else Path(x))
+
+    templates = load_prompt_templates()
+    config = load_search_parameters("scenario1")
+    agent = AccommodationAgent(config, openai_client=None, prompt_templates=templates)  # type: ignore[arg-type]
+
+    # Should not raise exception even if logging fails
+    decision = await agent.evaluate_iteration(
+        iteration_num=1,
+        inventory_batch=[_inventory_option()],
+        failed_items=[_failed_item()],
+        scenario_name="scenario1",
+    )
+
+    # Verify LLM call succeeded despite logging failure
+    assert decision.continue_search is False
+    assert decision.viable_options[0].summary.startswith("Allocate")
+    assert runner_stub.calls, "expected Runner.run to be invoked"
+
+    # Cleanup
+    log_dir.chmod(0o755)
