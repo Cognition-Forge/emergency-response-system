@@ -110,6 +110,35 @@ Runtime knobs may also be supplied as environment variables (fallbacks shown in 
 - `LOG_LEVEL` (`INFO`)
 - `LOG_LLM_CALLS` (`false`) — set to `true` to log full LLM request/response payloads to `logs/llm_calls.jsonl` for debugging
 
+## AI Provider Configuration
+
+The system supports multiple LLM providers through LangChain. Configure the provider in `config/search_parameters.yaml`:
+
+```yaml
+default:
+  ai_provider: "openai"        # Options: "openai", "anthropic", "google"
+  ai_model: "gpt-4o-mini"     # Provider-specific model name
+  ai_temperature: 0.2          # Sampling temperature (0.0-1.0)
+  ai_max_output_tokens: 900    # Maximum response tokens
+  ai_timeout_seconds: 30       # Request timeout
+```
+
+**Supported Providers & Models:**
+- **OpenAI**: `gpt-4o-mini` (default), `gpt-4o`, `gpt-4-turbo`
+- **Anthropic**: `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`
+- **Google**: `gemini-1.5-pro`, `gemini-1.5-flash`, `gemini-2.0-flash-exp`
+
+**Environment Variables:**
+Set the API key for your chosen provider:
+- OpenAI: `OPENAI_API_KEY=sk-your-key-here`
+- Anthropic: `ANTHROPIC_API_KEY=sk-ant-your-key-here`
+- Google: `GOOGLE_API_KEY=your-google-api-key-here`
+
+**Important Notes:**
+- The `ai_provider` setting is **system-wide** and cannot be overridden per scenario (enforced at runtime)
+- Only the API key for the configured provider is required; other provider keys may be omitted
+- Existing OpenAI configurations work without changes (defaults to `openai` provider)
+
 ## Environment Setup
 The CLI automatically loads `.env` if present. A starter file is included:
 

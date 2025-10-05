@@ -6,13 +6,10 @@ import argparse
 import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator, Mapping
+from typing import Mapping
 
 from dotenv import load_dotenv
-from agents.models import _openai_shared
-from openai import AsyncOpenAI
 
 from ai_agent import AIIntegrationError, AccommodationAgent, load_prompt_templates
 from cli_display import (
@@ -55,32 +52,43 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def validate_environment() -> tuple[str, str]:
+def validate_environment(provider: str = "openai") -> str:
+    """Validate environment variables for the specified AI provider.
+
+    Args:
+        provider: AI provider name (openai, anthropic, or google)
+
+    Returns:
+        database_url: PostgreSQL connection string
+
+    Raises:
+        RuntimeError: If required environment variables are missing
+    """
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL must be set to run the CLI")
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY must be set for AI evaluation")
+    provider = provider.lower()
+    env_keys = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": "GOOGLE_API_KEY",
+    }
 
-    return database_url, api_key
+    env_key = env_keys.get(provider)
+    if not env_key:
+        raise RuntimeError(f"Unsupported provider: {provider}")
 
+    if not os.getenv(env_key):
+        raise RuntimeError(f"{env_key} must be set for {provider} provider")
 
-@asynccontextmanager
-async def create_openai_client(api_key: str) -> AsyncIterator[AsyncOpenAI]:
-    client = AsyncOpenAI(api_key=api_key)
-    try:
-        yield client
-    finally:
-        await client.close()
+    return database_url
 
 
 async def run_accommodation_analysis(
     scenario_name: str,
     config_dir: Path,
     database_url: str,
-    openai_api_key: str,
     max_iterations_override: int | None = None,
 ) -> None:
     search_config = load_search_parameters(scenario_name, config_dir)
@@ -101,48 +109,45 @@ async def run_accommodation_analysis(
     evaluated = False
 
     try:
-        async with create_openai_client(openai_api_key) as client:
-            _openai_shared.set_default_openai_key(openai_api_key)
-            _openai_shared.set_default_openai_client(client)
-            agent = AccommodationAgent(search_config, client, prompt_templates)
+        agent = AccommodationAgent(search_config, prompt_templates)
 
-            with progress:
-                for iteration in range(1, total_iterations + 1):
-                    progress.update(task_id, description=f"Iteration {iteration}")
+        with progress:
+            for iteration in range(1, total_iterations + 1):
+                progress.update(task_id, description=f"Iteration {iteration}")
 
-                    batch = await load_inventory_by_iteration(
-                        database_url,
-                        failed_items,
-                        iteration_num=iteration,
-                        config=search_config,
-                    )
+                batch = await load_inventory_by_iteration(
+                    database_url,
+                    failed_items,
+                    iteration_num=iteration,
+                    config=search_config,
+                )
 
-                    if not batch:
-                        console.print("[yellow]No inventory options returned for this iteration.[/yellow]")
-                        progress.advance(task_id)
-                        continue
-
-                    decision = await agent.evaluate_iteration(
-                        iteration_num=iteration,
-                        inventory_batch=batch,
-                        failed_items=failed_items,
-                        scenario_name=scenario_name,
-                    )
-                    evaluated = True
-                    display_iteration_results(iteration, decision)
+                if not batch:
+                    console.print("[yellow]No inventory options returned for this iteration.[/yellow]")
                     progress.advance(task_id)
+                    continue
 
-                    if not decision.continue_search:
-                        progress.update(task_id, completed=total_iterations)
-                        break
+                decision = await agent.evaluate_iteration(
+                    iteration_num=iteration,
+                    inventory_batch=batch,
+                    failed_items=failed_items,
+                    scenario_name=scenario_name,
+                )
+                evaluated = True
+                display_iteration_results(iteration, decision)
+                progress.advance(task_id)
 
-            if not evaluated:
-                display_error("Unable to evaluate accommodations; no viable inventory batches returned.", error_type="Warning")
-                return
+                if not decision.continue_search:
+                    progress.update(task_id, completed=total_iterations)
+                    break
 
-            final = await agent.final_recommendation()
-            display_final_recommendation(final)
-            display_success("Accommodation analysis complete")
+        if not evaluated:
+            display_error("Unable to evaluate accommodations; no viable inventory batches returned.", error_type="Warning")
+            return
+
+        final = await agent.final_recommendation()
+        display_final_recommendation(final)
+        display_success("Accommodation analysis complete")
 
     except AIIntegrationError as exc:
         logger.exception("AI evaluation failed")
@@ -166,7 +171,12 @@ def main() -> None:
         if not config_dir.is_dir():
             raise RuntimeError(f"Configuration directory not found: {config_dir}")
 
-        database_url, api_key = validate_environment()
+        # Load config to determine provider
+        search_config = load_search_parameters(args.scenario, config_dir)
+        provider = search_config.get("ai_provider", "openai")
+
+        # Validate environment for the configured provider
+        database_url = validate_environment(provider)
 
         display_success(f"Starting emergency accommodation analysis for {args.scenario}")
         asyncio.run(
@@ -174,7 +184,6 @@ def main() -> None:
                 scenario_name=args.scenario,
                 config_dir=config_dir,
                 database_url=database_url,
-                openai_api_key=api_key,
                 max_iterations_override=args.max_iterations,
             )
         )

@@ -65,6 +65,13 @@ def load_search_parameters(
     if not isinstance(scenario_config, Mapping):
         raise ConfigurationError("Scenario overrides must be a mapping", code="C105")
 
+    # Enforce system-wide provider configuration (AC-003)
+    if "ai_provider" in scenario_config:
+        raise ConfigurationError(
+            "ai_provider cannot be overridden per scenario. Configure in 'default' section only.",
+            code="C115",
+        )
+
     merged: dict[str, Any] = dict(defaults)
     merged.update(scenario_config)
     return merged

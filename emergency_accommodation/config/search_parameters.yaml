@@ -6,6 +6,10 @@ default:
   early_stopping_threshold: 5
   risk_tolerance: "moderate"
   approval_preference: "minimize"
+  ai_provider: "openai"
+  ai_model: "gpt-4o-mini"
+  ai_temperature: 0.2
+  ai_max_output_tokens: 900
   ai_timeout_seconds: 30
 
 scenarios:

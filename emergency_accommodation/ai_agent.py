@@ -12,9 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
-from agents import Agent, Runner, model_settings
-from agents.run import RunConfig
-from openai import AsyncOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_core.exceptions import OutputParserException
+from langchain_core.language_models import BaseChatModel
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from config import DEFAULT_CONFIG_DIR, PromptTemplates
@@ -87,14 +89,21 @@ async def _log_llm_call(
     runner_coro: Callable[[], Awaitable[Any]],
 ) -> Any:
     """Wrapper that logs LLM calls if LOG_LLM_CALLS=true."""
+    import logging
+    logger = logging.getLogger(__name__)
+
     # Check if logging is enabled
     if os.getenv("LOG_LLM_CALLS", "false").lower() != "true":
         return await runner_coro()
 
-    # Prepare log directory (relative to working directory)
-    log_dir = Path("logs")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "llm_calls.jsonl"
+    # Prepare log directory (relative to working directory) with error handling
+    try:
+        log_dir = Path("logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / "llm_calls.jsonl"
+    except OSError as exc:
+        logger.warning(f"Cannot create logs directory: {exc}. LLM logging disabled.")
+        return await runner_coro()
 
     # Capture request metadata
     request_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -149,17 +158,46 @@ async def _log_llm_call(
     return result
 
 
+def _create_llm_client(config: Mapping[str, Any]) -> BaseChatModel:
+    """Create LangChain LLM client based on provider configuration.
+
+    Note: Google uses max_output_tokens parameter, OpenAI/Anthropic use max_tokens.
+
+    Args:
+        config: Configuration mapping containing ai_provider, ai_model, etc.
+
+    Returns:
+        LangChain BaseChatModel instance for the configured provider
+
+    Raises:
+        AIIntegrationError: If provider is unsupported (code I308)
+    """
+    provider = config.get("ai_provider", "openai").lower()
+    model = config.get("ai_model", "gpt-4o-mini")
+    temperature = float(config.get("ai_temperature", 0.2))
+    max_tokens = int(config.get("ai_max_output_tokens", 900))
+
+    if provider == "openai":
+        return ChatOpenAI(model=model, temperature=temperature, max_tokens=max_tokens)
+    elif provider == "anthropic":
+        return ChatAnthropic(model=model, temperature=temperature, max_tokens=max_tokens)
+    elif provider == "google":
+        # Google uses max_output_tokens instead of max_tokens
+        return ChatGoogleGenerativeAI(model=model, temperature=temperature, max_output_tokens=max_tokens)
+    else:
+        raise AIIntegrationError(f"Unsupported provider: {provider}", code="I308")
+
+
 class AccommodationAgent:
     """Drives AI-assisted decision making for emergency accommodations."""
 
     def __init__(
         self,
         config: Mapping[str, Any],
-        openai_client: AsyncOpenAI | None,
         prompt_templates: Mapping[str, PromptTemplates],
     ) -> None:
         self._config = dict(config)
-        self._client = openai_client
+        self._llm = _create_llm_client(config)
         self._templates: Mapping[str, PromptTemplates] = prompt_templates
         self._iteration_history: list[_IterationContext] = []
         self._decisions: list[IterationDecision] = []
@@ -186,15 +224,21 @@ class AccommodationAgent:
             inventory_options=inventory_payload,
         )
 
-        iteration_agent = self._create_agent(
-            name="Iteration Evaluator",
-            instructions=template.combined,
-            output_type=_IterationDecisionPayload,
+        # Create structured LLM using LangChain
+        structured_llm = self._llm.with_structured_output(
+            schema=_IterationDecisionPayload,
+            method="function_calling",
         )
+
+        # Build messages for LangChain
+        messages = [
+            {"role": "system", "content": template.combined},
+            {"role": "user", "content": payload},
+        ]
 
         timeout = float(self._config.get("ai_timeout_seconds", 12.0))
         try:
-            result = await asyncio.wait_for(
+            structured = await asyncio.wait_for(
                 _log_llm_call(
                     agent_name="Iteration Evaluator",
                     model=self._config.get("ai_model", "gpt-4o-mini"),
@@ -204,20 +248,20 @@ class AccommodationAgent:
                         "temperature": float(self._config.get("ai_temperature", 0.2)),
                         "max_tokens": int(self._config.get("ai_max_output_tokens", 900)),
                     },
-                    runner_coro=lambda: Runner.run(
-                        iteration_agent,
-                        payload,
-                        run_config=self._build_run_config(),
-                    ),
+                    runner_coro=lambda: structured_llm.ainvoke(messages),
                 ),
                 timeout=timeout,
             )
-        except Exception as exc:  # pragma: no cover - delegated to SDK
+        except OutputParserException as exc:
+            raise AIIntegrationError("Response validation failed", code="I302", cause=exc) from exc
+        except asyncio.TimeoutError as exc:
+            raise AIIntegrationError(
+                f"AI request timed out after {timeout}s",
+                code="I309",
+                cause=exc,
+            ) from exc
+        except Exception as exc:
             raise AIIntegrationError("AI request failed", code="I307", cause=exc) from exc
-
-        structured = result.final_output
-        if structured is None:
-            raise AIIntegrationError("Iteration response missing payload", code="I302")
 
         parsed = self._convert_iteration(structured)
 
@@ -245,15 +289,21 @@ class AccommodationAgent:
         template = self._load_prompt_template(scenario)
         payload = self._build_final_payload(template, scenario)
 
-        final_agent = self._create_agent(
-            name="Final Recommender",
-            instructions=template.combined,
-            output_type=_FinalRecommendationPayload,
+        # Create structured LLM using LangChain
+        structured_llm = self._llm.with_structured_output(
+            schema=_FinalRecommendationPayload,
+            method="function_calling",
         )
+
+        # Build messages for LangChain
+        messages = [
+            {"role": "system", "content": template.combined},
+            {"role": "user", "content": payload},
+        ]
 
         timeout = float(self._config.get("ai_timeout_seconds", 12.0))
         try:
-            result = await asyncio.wait_for(
+            structured = await asyncio.wait_for(
                 _log_llm_call(
                     agent_name="Final Recommender",
                     model=self._config.get("ai_model", "gpt-4o-mini"),
@@ -263,20 +313,20 @@ class AccommodationAgent:
                         "temperature": float(self._config.get("ai_temperature", 0.2)),
                         "max_tokens": int(self._config.get("ai_max_output_tokens", 900)),
                     },
-                    runner_coro=lambda: Runner.run(
-                        final_agent,
-                        payload,
-                        run_config=self._build_run_config(),
-                    ),
+                    runner_coro=lambda: structured_llm.ainvoke(messages),
                 ),
                 timeout=timeout,
             )
-        except Exception as exc:  # pragma: no cover - delegated to SDK
+        except OutputParserException as exc:
+            raise AIIntegrationError("Response validation failed", code="I302", cause=exc) from exc
+        except asyncio.TimeoutError as exc:
+            raise AIIntegrationError(
+                f"AI request timed out after {timeout}s",
+                code="I309",
+                cause=exc,
+            ) from exc
+        except Exception as exc:
             raise AIIntegrationError("AI request failed", code="I307", cause=exc) from exc
-
-        structured = result.final_output
-        if structured is None:
-            raise AIIntegrationError("Final response missing payload", code="I305")
 
         return self._convert_final(structured)
 
@@ -329,38 +379,6 @@ class AccommodationAgent:
         for decision in self._decisions:
             assessments.extend(option.to_dict() for option in decision.viable_options)
         return assessments
-
-    def _create_agent(
-        self,
-        *,
-        name: str,
-        instructions: str,
-        output_type: type[BaseModel],
-    ) -> Agent[Any]:
-        temperature = float(self._config.get("ai_temperature", 0.2))
-        max_tokens = int(self._config.get("ai_max_output_tokens", 900))
-        settings = model_settings.ModelSettings(
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        system_instructions = (
-            f"{instructions}\n\n"
-            "Always respond using the structured schema provided."
-        )
-
-        return Agent(
-            name=name,
-            instructions=system_instructions,
-            model=self._config.get("ai_model", "gpt-4o-mini"),
-            model_settings=settings,
-            output_type=output_type,
-        )
-
-    def _build_run_config(self) -> RunConfig:
-        # The Agents SDK uses the underlying OpenAI client; we pass model overrides via Agent
-        # and rely on asyncio timeouts at the Runner level for request timing.
-        return RunConfig()
 
     def _convert_iteration(self, payload: _IterationDecisionPayload) -> IterationDecision:
         try:
