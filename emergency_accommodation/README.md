@@ -6,7 +6,7 @@ AI-guided command-line workflow for triaging failed supply chain shipments and r
 - Python 3.11+
 - [`uv`](https://github.com/astral-sh/uv) for environment management
 - Local PostgreSQL stack from `postgres-scenarios/` (see below)
-- OpenAI API key exposed as `OPENAI_API_KEY`
+- AI provider API key (OpenAI, Anthropic, or Google - see AI Provider Configuration below)
 - TLS-enabled database URL exported as `DATABASE_URL` (e.g. `postgresql://user:pass@127.0.0.1:5432/materials_management`)
 - Recommended: copy `.env.example` to `.env` and populate the variables (the CLI auto-loads `.env` files via `python-dotenv`).
 
@@ -16,7 +16,7 @@ cd emergency_accommodation
 uv sync
 ```
 
-All project dependencies (asyncpg, pydantic, openai, rich, etc.) and dev tooling (pytest, mypy, pytest-cov) are pinned in `pyproject.toml`. `uv sync` creates a `.venv/` and downloads exact versions.
+All project dependencies (asyncpg, pydantic, langchain, rich, etc.) and dev tooling (pytest, mypy, pytest-cov) are pinned in `pyproject.toml`. `uv sync` creates a `.venv/` and downloads exact versions.
 
 ## Database & Scenarios
 The CLI expects the demo database from `postgres-scenarios/`:
@@ -145,7 +145,7 @@ The CLI automatically loads `.env` if present. A starter file is included:
 ```bash
 cd emergency_accommodation
 cp .env.example .env
-# edit DATABASE_URL and OPENAI_API_KEY before running the CLI
+# edit DATABASE_URL and provider-specific API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_API_KEY) before running the CLI
 ```
 
 ## Running the CLI
@@ -173,10 +173,11 @@ Common launch patterns:
 Architecture overviews are available in [`docs/emergency_accommodation_flowchart.md`](../docs/emergency_accommodation_flowchart.md).
 
 ## AI Agent Internals
-- The CLI now relies on the OpenAI Agents SDK (`openai-agents`) to evaluate each iteration and produce a final recommendation.
-- Prompt text files are merged into the Agent's `instructions`, while iteration payloads (failed items + candidate inventory) are passed as JSON.
-- Structured outputs from the Agent are parsed into the existing domain models (`IterationDecision`, `FinalRecommendation`), so downstream display logic remains unchanged.
-- Timeout, temperature, and token limits are still controlled through YAML/env overrides listed above.
+- The CLI uses LangChain with structured outputs to evaluate each iteration and produce a final recommendation.
+- Supports multiple providers (OpenAI, Anthropic, Google) through a unified interface via `BaseChatModel`.
+- Prompt text files are merged into the LLM's instructions, while iteration payloads (failed items + candidate inventory) are passed as JSON.
+- Structured outputs are validated against Pydantic schemas and parsed into domain models (`IterationDecision`, `FinalRecommendation`), so downstream display logic remains unchanged.
+- Timeout, temperature, and token limits are controlled through YAML/env overrides listed above.
 - **LLM Call Logging**: Set `LOG_LLM_CALLS=true` to capture complete request/response payloads in JSON Lines format at `logs/llm_calls.jsonl`. This is useful for debugging agent behavior, analyzing performance, or estimating token usage. Logging uses stdlib only and fails gracefully if disk write errors occur.
 
 ## Testing

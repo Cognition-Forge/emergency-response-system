@@ -27,7 +27,7 @@
 - Validation relies on the helper SQL under `scripts/queries/`; load all three scenarios before running checks.
 - Manual verification: run `validation-checks.sql` then `accommodation-analysis.sql` to confirm `fn_emergency_inventory_search` outputs expected impact levels.
 - When adding scenario data, include deterministic UUIDs and expand validation queries with matching expectations.
-- AI agent tests mock OpenAI responses; live suites require exporting `OPENAI_API_KEY` and `DATABASE_URL`. Timeout behaviour defaults to 30s—tune with `AI_TIMEOUT_SECONDS` if needed.
+- AI agent tests mock LangChain providers; live suites require exporting `DATABASE_URL` and provider-specific API key (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY` based on `ai_provider` config). Timeout behaviour defaults to 30s—tune with `AI_TIMEOUT_SECONDS` if needed.
 - LLM request/response logging can be enabled with `LOG_LLM_CALLS=true` (writes to `emergency_accommodation/logs/llm_calls.jsonl`). The `logs/` directory is gitignored.
 
 ## Documentation

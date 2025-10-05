@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +16,8 @@ import main as cli_main
 def _env_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
 
 
 def _failed_item() -> FailedItem:
@@ -67,19 +68,84 @@ def _option_assessment(summary: str, score: float, impact: str = "minor_impact")
     )
 
 
-def test_validate_environment_success(monkeypatch: pytest.MonkeyPatch) -> None:
+# Test validate_environment
+
+
+def test_validate_environment_openai_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://example")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
-    db_url, api_key = cli_main.validate_environment()
+    db_url = cli_main.validate_environment("openai")
     assert db_url == "postgresql://example"
-    assert api_key == "sk-test"
 
 
-def test_validate_environment_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_environment_anthropic_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://example")
-    with pytest.raises(RuntimeError):
-        cli_main.validate_environment()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+
+    db_url = cli_main.validate_environment("anthropic")
+    assert db_url == "postgresql://example"
+
+
+def test_validate_environment_google_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("GOOGLE_API_KEY", "google-test")
+
+    db_url = cli_main.validate_environment("google")
+    assert db_url == "postgresql://example"
+
+
+def test_validate_environment_defaults_to_openai(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    # No provider specified, should default to openai
+    db_url = cli_main.validate_environment()
+    assert db_url == "postgresql://example"
+
+
+def test_validate_environment_missing_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    with pytest.raises(RuntimeError, match="DATABASE_URL must be set"):
+        cli_main.validate_environment("openai")
+
+
+def test_validate_environment_missing_openai_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY must be set"):
+        cli_main.validate_environment("openai")
+
+
+def test_validate_environment_missing_anthropic_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY must be set"):
+        cli_main.validate_environment("anthropic")
+
+
+def test_validate_environment_missing_google_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY must be set"):
+        cli_main.validate_environment("google")
+
+
+def test_validate_environment_unsupported_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    with pytest.raises(RuntimeError, match="Unsupported provider"):
+        cli_main.validate_environment("unsupported")
+
+
+def test_validate_environment_only_checks_configured_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that only the configured provider's API key is required."""
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    # ANTHROPIC_API_KEY and GOOGLE_API_KEY not set
+
+    # Should succeed - only checks OPENAI_API_KEY
+    db_url = cli_main.validate_environment("openai")
+    assert db_url == "postgresql://example"
+
+
+# Test run_accommodation_analysis
 
 
 @pytest.mark.asyncio
@@ -89,6 +155,7 @@ async def test_run_accommodation_analysis_happy_path(monkeypatch: pytest.MonkeyP
         "batch_size_per_iteration": 10,
         "early_stopping_threshold": 5,
         "search_order": "urgency_first",
+        "ai_provider": "openai",
     })
 
     monkeypatch.setattr(
@@ -141,7 +208,7 @@ async def test_run_accommodation_analysis_happy_path(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(cli_main, "display_progress_bar", lambda description, total: (FakeProgress(), 1))
 
     class FakeAgent:
-        def __init__(self, config, client, templates):
+        def __init__(self, config, templates):
             self._decision = IterationDecision(
                 continue_search=False,
                 reasoning="Threshold met",
@@ -160,17 +227,10 @@ async def test_run_accommodation_analysis_happy_path(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(cli_main, "AccommodationAgent", FakeAgent)
 
-    @asynccontextmanager
-    async def fake_client(api_key: str):
-        yield object()
-
-    monkeypatch.setattr(cli_main, "create_openai_client", fake_client)
-
     await cli_main.run_accommodation_analysis(
         scenario_name="scenario1",
         config_dir=Path("."),
         database_url="postgresql://example",
-        openai_api_key="sk-test",
     )
 
     assert iteration_called == [1]
@@ -181,6 +241,7 @@ async def test_run_accommodation_analysis_happy_path(monkeypatch: pytest.MonkeyP
 async def test_run_accommodation_analysis_no_failed_items(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli_main, "load_search_parameters", lambda *args, **kwargs: {
         "max_iterations": 1,
+        "ai_provider": "openai",
     })
     monkeypatch.setattr(cli_main, "load_prompt_templates", lambda *args, **kwargs: {
         "scenario1": PromptTemplates(base="b", scenario="s", combined="c"),
@@ -198,7 +259,6 @@ async def test_run_accommodation_analysis_no_failed_items(monkeypatch: pytest.Mo
         scenario_name="scenario1",
         config_dir=Path("."),
         database_url="postgresql://example",
-        openai_api_key="sk-test",
     )
 
     assert errors and "No failed items" in errors[0][0]

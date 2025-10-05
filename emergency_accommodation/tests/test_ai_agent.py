@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from pydantic import BaseModel
+from langchain_core.exceptions import OutputParserException
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from ai_agent import (
     AIIntegrationError,
@@ -15,21 +18,35 @@ from ai_agent import (
     _FinalRecommendationPayload,
     _IterationDecisionPayload,
     _OptionAssessmentPayload,
+    _create_llm_client,
     load_prompt_templates,
 )
 from config import load_search_parameters
 from models import FailedItem, InventoryOption
 
 
-class _RunnerStub:
-    def __init__(self, payloads: list[Any]) -> None:
-        self.payloads = payloads
-        self.calls: list[dict[str, Any]] = []
+@pytest.fixture
+def sample_config():
+    """Sample configuration for tests."""
+    return {
+        "ai_provider": "openai",
+        "ai_model": "gpt-4o-mini",
+        "ai_temperature": 0.2,
+        "ai_max_output_tokens": 900,
+        "ai_timeout_seconds": 30,
+        "early_stopping_threshold": 5,
+    }
 
-    async def __call__(self, agent: Any, payload: str, *, run_config: Any) -> Any:
-        self.calls.append({"agent": agent, "payload": payload, "run_config": run_config})
-        output = self.payloads.pop(0)
-        return SimpleNamespace(final_output=output)
+
+@pytest.fixture
+def mock_llm(monkeypatch):
+    """Mock LangChain LLM with structured output."""
+    from unittest.mock import MagicMock, AsyncMock
+
+    mock_llm_client = MagicMock(spec=ChatOpenAI)
+    mock_structured = AsyncMock()
+    mock_llm_client.with_structured_output.return_value = mock_structured
+    return mock_llm_client, mock_structured
 
 
 def _failed_item() -> FailedItem:
@@ -100,14 +117,71 @@ def _final_payload() -> _FinalRecommendationPayload:
     )
 
 
+# Test provider factory
+
+
+def test_create_llm_client_openai(sample_config, monkeypatch):
+    """Test OpenAI provider creation."""
+    from unittest.mock import MagicMock
+
+    # Mock the provider classes to avoid API key validation
+    mock_openai = MagicMock(spec=ChatOpenAI)
+    monkeypatch.setattr("ai_agent.ChatOpenAI", lambda **kwargs: mock_openai)
+
+    sample_config["ai_provider"] = "openai"
+    client = _create_llm_client(sample_config)
+    assert client == mock_openai
+
+
+def test_create_llm_client_anthropic(sample_config, monkeypatch):
+    """Test Anthropic provider creation."""
+    from unittest.mock import MagicMock
+
+    # Mock the provider classes to avoid API key validation
+    mock_anthropic = MagicMock(spec=ChatAnthropic)
+    monkeypatch.setattr("ai_agent.ChatAnthropic", lambda **kwargs: mock_anthropic)
+
+    sample_config["ai_provider"] = "anthropic"
+    client = _create_llm_client(sample_config)
+    assert client == mock_anthropic
+
+
+def test_create_llm_client_google(sample_config, monkeypatch):
+    """Test Google provider creation."""
+    from unittest.mock import MagicMock
+
+    # Mock the provider classes to avoid API key validation
+    mock_google = MagicMock(spec=ChatGoogleGenerativeAI)
+    monkeypatch.setattr("ai_agent.ChatGoogleGenerativeAI", lambda **kwargs: mock_google)
+
+    sample_config["ai_provider"] = "google"
+    client = _create_llm_client(sample_config)
+    assert client == mock_google
+
+
+def test_create_llm_client_unsupported_provider(sample_config):
+    """Test unsupported provider raises I308 error."""
+    sample_config["ai_provider"] = "unsupported"
+    with pytest.raises(AIIntegrationError) as exc:
+        _create_llm_client(sample_config)
+    assert exc.value.code == "I308"
+    assert "Unsupported provider" in str(exc.value)
+
+
+# Test evaluate_iteration
+
+
 @pytest.mark.asyncio
-async def test_evaluate_iteration_uses_agent(monkeypatch: pytest.MonkeyPatch) -> None:
-    runner_stub = _RunnerStub([_iteration_payload()])
-    monkeypatch.setattr("ai_agent.Runner.run", runner_stub)
+async def test_evaluate_iteration_success(monkeypatch, sample_config, mock_llm):
+    """Test successful iteration evaluation."""
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
+
+    # Mock ainvoke to return iteration payload
+    mock_structured.ainvoke.return_value = _iteration_payload()
 
     templates = load_prompt_templates()
-    config = load_search_parameters("scenario1")
-    agent = AccommodationAgent(config, openai_client=None, prompt_templates=templates)  # type: ignore[arg-type]
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
 
     decision = await agent.evaluate_iteration(
         iteration_num=1,
@@ -118,17 +192,145 @@ async def test_evaluate_iteration_uses_agent(monkeypatch: pytest.MonkeyPatch) ->
 
     assert decision.continue_search is False
     assert decision.viable_options[0].summary.startswith("Allocate")
-    assert runner_stub.calls, "expected Runner.run to be invoked"
+    mock_llm_client.with_structured_output.assert_called_once()
+    mock_structured.ainvoke.assert_called_once()
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic", "google"])
+@pytest.mark.asyncio
+async def test_evaluate_iteration_all_providers(monkeypatch, sample_config, mock_llm, provider):
+    """Test all providers work with same interface."""
+    sample_config["ai_provider"] = provider
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
+
+    # Mock ainvoke to return iteration payload
+    mock_structured.ainvoke.return_value = _iteration_payload()
+
+    templates = load_prompt_templates()
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
+
+    decision = await agent.evaluate_iteration(
+        iteration_num=1,
+        inventory_batch=[_inventory_option()],
+        failed_items=[_failed_item()],
+        scenario_name="scenario1",
+    )
+
+    assert decision.continue_search is False
+    assert decision.viable_options[0].summary.startswith("Allocate")
+    mock_structured.ainvoke.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_final_recommendation_returns_structured_output(monkeypatch: pytest.MonkeyPatch) -> None:
-    runner_stub = _RunnerStub([_iteration_payload(), _final_payload()])
-    monkeypatch.setattr("ai_agent.Runner.run", runner_stub)
+async def test_evaluate_iteration_parser_error(monkeypatch, sample_config, mock_llm):
+    """Test OutputParserException is mapped to I302 error."""
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
+
+    # Mock ainvoke to raise OutputParserException
+    mock_structured.ainvoke.side_effect = OutputParserException("Invalid schema")
 
     templates = load_prompt_templates()
-    config = load_search_parameters("scenario1")
-    agent = AccommodationAgent(config, openai_client=None, prompt_templates=templates)  # type: ignore[arg-type]
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
+
+    with pytest.raises(AIIntegrationError) as exc:
+        await agent.evaluate_iteration(
+            iteration_num=1,
+            inventory_batch=[_inventory_option()],
+            failed_items=[_failed_item()],
+            scenario_name="scenario1",
+        )
+
+    assert exc.value.code == "I302"
+    assert "Response validation failed" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_evaluate_iteration_timeout(monkeypatch, sample_config, mock_llm):
+    """Test timeout is mapped to I309 error."""
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
+
+    # Mock ainvoke to hang (timeout)
+    async def _hang(*args, **kwargs):
+        await asyncio.sleep(100)
+
+    mock_structured.ainvoke.side_effect = _hang
+    sample_config["ai_timeout_seconds"] = 0.1  # Very short timeout
+
+    templates = load_prompt_templates()
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
+
+    with pytest.raises(AIIntegrationError) as exc:
+        await agent.evaluate_iteration(
+            iteration_num=1,
+            inventory_batch=[_inventory_option()],
+            failed_items=[_failed_item()],
+            scenario_name="scenario1",
+        )
+
+    assert exc.value.code == "I309"
+    assert "timed out" in str(exc.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_evaluate_iteration_generic_error(monkeypatch, sample_config, mock_llm):
+    """Test generic error is mapped to I307."""
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
+
+    # Mock ainvoke to raise RuntimeError
+    mock_structured.ainvoke.side_effect = RuntimeError("API error")
+
+    templates = load_prompt_templates()
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
+
+    with pytest.raises(AIIntegrationError) as exc:
+        await agent.evaluate_iteration(
+            iteration_num=1,
+            inventory_batch=[_inventory_option()],
+            failed_items=[_failed_item()],
+            scenario_name="scenario1",
+        )
+
+    assert exc.value.code == "I307"
+
+
+@pytest.mark.asyncio
+async def test_evaluate_iteration_empty_inventory(monkeypatch, sample_config, mock_llm):
+    """Test error when inventory batch is empty."""
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
+
+    templates = load_prompt_templates()
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
+
+    with pytest.raises(AIIntegrationError) as exc:
+        await agent.evaluate_iteration(
+            iteration_num=1,
+            inventory_batch=[],  # Empty batch
+            failed_items=[_failed_item()],
+            scenario_name="scenario1",
+        )
+
+    assert exc.value.code == "I301"
+
+
+# Test final_recommendation
+
+
+@pytest.mark.asyncio
+async def test_final_recommendation_returns_structured_output(monkeypatch, sample_config, mock_llm):
+    """Test final recommendation returns structured output."""
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
+
+    # Mock ainvoke to return payloads in sequence
+    mock_structured.ainvoke.side_effect = [_iteration_payload(), _final_payload()]
+
+    templates = load_prompt_templates()
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
 
     await agent.evaluate_iteration(
         iteration_num=1,
@@ -143,40 +345,130 @@ async def test_final_recommendation_returns_structured_output(monkeypatch: pytes
 
 
 @pytest.mark.asyncio
-async def test_agent_failure_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _raise(*args, **kwargs):
-        raise RuntimeError("agent failed")
-
-    monkeypatch.setattr("ai_agent.Runner.run", _raise)
+async def test_final_recommendation_no_iterations(monkeypatch, sample_config, mock_llm):
+    """Test final_recommendation raises error when called without iterations."""
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
 
     templates = load_prompt_templates()
-    config = load_search_parameters("scenario1")
-    agent = AccommodationAgent(config, openai_client=None, prompt_templates=templates)  # type: ignore[arg-type]
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
 
     with pytest.raises(AIIntegrationError) as exc:
-        await agent.evaluate_iteration(
-            iteration_num=1,
-            inventory_batch=[_inventory_option()],
-            failed_items=[_failed_item()],
-            scenario_name="scenario1",
-        )
-    assert exc.value.code == "I307"
+        await agent.final_recommendation()
+
+    assert exc.value.code == "I303"
 
 
 @pytest.mark.asyncio
-async def test_llm_logging_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_final_recommendation_timeout(monkeypatch, sample_config, mock_llm):
+    """Test timeout in final_recommendation is mapped to I309."""
+    from unittest.mock import AsyncMock
+
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
+
+    # Create a new AsyncMock that will hang for final recommendation
+    hanging_mock = AsyncMock()
+    async def _hang(*args, **kwargs):
+        await asyncio.sleep(100)
+    hanging_mock.side_effect = _hang
+
+    # Return iteration payload first, then switch to hanging mock
+    first_call = True
+    original_invoke = mock_structured.ainvoke
+
+    async def _conditional_invoke(*args, **kwargs):
+        nonlocal first_call
+        if first_call:
+            first_call = False
+            return _iteration_payload()
+        else:
+            await asyncio.sleep(100)
+
+    mock_structured.ainvoke = _conditional_invoke
+    sample_config["ai_timeout_seconds"] = 0.1
+
+    templates = load_prompt_templates()
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
+
+    await agent.evaluate_iteration(
+        iteration_num=1,
+        inventory_batch=[_inventory_option()],
+        failed_items=[_failed_item()],
+        scenario_name="scenario1",
+    )
+
+    with pytest.raises(AIIntegrationError) as exc:
+        await agent.final_recommendation()
+
+    assert exc.value.code == "I309"
+
+
+@pytest.mark.asyncio
+async def test_early_stopping_threshold_triggers(monkeypatch, sample_config, mock_llm):
+    """Test early stopping threshold triggers when enough options found."""
+    from uuid import uuid4
+
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
+
+    # Create payload with continue_search=True and 5 options (matches threshold)
+    options = [
+        _OptionAssessmentPayload(
+            inventory_id=str(uuid4()),
+            summary=f"Option {i}",
+            impact_level="minor_impact",
+            confidence=0.8,
+            approvals_required=[],
+            trade_offs=[],
+            score=7.0,
+        )
+        for i in range(5)
+    ]
+    payload = _IterationDecisionPayload(
+        continue_search=True,  # Agent wants to continue
+        reasoning="Need more options",
+        viable_options=options,
+    )
+
+    mock_structured.ainvoke.return_value = payload
+    sample_config["early_stopping_threshold"] = 5
+
+    templates = load_prompt_templates()
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
+
+    decision = await agent.evaluate_iteration(
+        iteration_num=1,
+        inventory_batch=[_inventory_option()],
+        failed_items=[_failed_item()],
+        scenario_name="scenario1",
+    )
+
+    # Early stopping should have triggered (flipped to False)
+    assert decision.continue_search is False
+    assert "Early stopping threshold met" in decision.reasoning
+    assert len(decision.viable_options) == 5
+
+
+# Test LLM logging
+
+
+@pytest.mark.asyncio
+async def test_llm_logging_enabled(monkeypatch, sample_config, mock_llm, tmp_path: Path):
     """Verify log file created and contains expected fields when LOG_LLM_CALLS=true."""
-    runner_stub = _RunnerStub([_iteration_payload()])
-    monkeypatch.setattr("ai_agent.Runner.run", runner_stub)
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
     monkeypatch.setenv("LOG_LLM_CALLS", "true")
+
+    # Mock ainvoke to return iteration payload
+    mock_structured.ainvoke.return_value = _iteration_payload()
 
     # Override log directory to tmp_path
     log_file = tmp_path / "llm_calls.jsonl"
     monkeypatch.setattr("ai_agent.Path", lambda x: tmp_path if x == "logs" else Path(x))
 
     templates = load_prompt_templates()
-    config = load_search_parameters("scenario1")
-    agent = AccommodationAgent(config, openai_client=None, prompt_templates=templates)  # type: ignore[arg-type]
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
 
     await agent.evaluate_iteration(
         iteration_num=1,
@@ -192,7 +484,7 @@ async def test_llm_logging_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     log_content = log_file.read_text()
     log_entry = json.loads(log_content.strip())
 
-    # Verify required fields from AC-002 and AC-003
+    # Verify required fields
     assert "timestamp" in log_entry
     assert "agent" in log_entry
     assert log_entry["agent"] == "Iteration Evaluator"
@@ -211,18 +503,20 @@ async def test_llm_logging_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
 
 @pytest.mark.asyncio
-async def test_llm_logging_disabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_llm_logging_disabled(monkeypatch, sample_config, mock_llm, tmp_path: Path):
     """Verify no log file created when LOG_LLM_CALLS is false or unset."""
-    runner_stub = _RunnerStub([_iteration_payload()])
-    monkeypatch.setattr("ai_agent.Runner.run", runner_stub)
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
     monkeypatch.setenv("LOG_LLM_CALLS", "false")
+
+    # Mock ainvoke to return iteration payload
+    mock_structured.ainvoke.return_value = _iteration_payload()
 
     log_file = tmp_path / "llm_calls.jsonl"
     monkeypatch.setattr("ai_agent.Path", lambda x: tmp_path if x == "logs" else Path(x))
 
     templates = load_prompt_templates()
-    config = load_search_parameters("scenario1")
-    agent = AccommodationAgent(config, openai_client=None, prompt_templates=templates)  # type: ignore[arg-type]
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
 
     await agent.evaluate_iteration(
         iteration_num=1,
@@ -236,11 +530,14 @@ async def test_llm_logging_disabled(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 
 @pytest.mark.asyncio
-async def test_llm_logging_failure_does_not_crash(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+async def test_llm_logging_failure_does_not_crash(monkeypatch, sample_config, mock_llm, tmp_path: Path):
     """Verify logging failure doesn't crash LLM call - graceful degradation."""
-    runner_stub = _RunnerStub([_iteration_payload()])
-    monkeypatch.setattr("ai_agent.Runner.run", runner_stub)
+    mock_llm_client, mock_structured = mock_llm
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
     monkeypatch.setenv("LOG_LLM_CALLS", "true")
+
+    # Mock ainvoke to return iteration payload
+    mock_structured.ainvoke.return_value = _iteration_payload()
 
     # Make log directory read-only to force write failure
     log_dir = tmp_path / "readonly_logs"
@@ -249,8 +546,7 @@ async def test_llm_logging_failure_does_not_crash(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr("ai_agent.Path", lambda x: log_dir if x == "logs" else Path(x))
 
     templates = load_prompt_templates()
-    config = load_search_parameters("scenario1")
-    agent = AccommodationAgent(config, openai_client=None, prompt_templates=templates)  # type: ignore[arg-type]
+    agent = AccommodationAgent(sample_config, prompt_templates=templates)
 
     # Should not raise exception even if logging fails
     decision = await agent.evaluate_iteration(
@@ -263,7 +559,7 @@ async def test_llm_logging_failure_does_not_crash(monkeypatch: pytest.MonkeyPatc
     # Verify LLM call succeeded despite logging failure
     assert decision.continue_search is False
     assert decision.viable_options[0].summary.startswith("Allocate")
-    assert runner_stub.calls, "expected Runner.run to be invoked"
+    mock_structured.ainvoke.assert_called_once()
 
     # Cleanup
     log_dir.chmod(0o755)

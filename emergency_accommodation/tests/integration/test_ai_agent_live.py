@@ -13,40 +13,13 @@ from ai_agent import (
     _IterationDecisionPayload,
     load_prompt_templates,
 )
-from types import SimpleNamespace
 from config import load_search_parameters
 from database import load_failed_items, load_inventory_by_iteration
-from agents import Runner
 
 _database_url = os.getenv("DATABASE_URL")
 if not _database_url:
     pytest.skip("DATABASE_URL is required for live AI agent integration tests", allow_module_level=True)
 DATABASE_URL = cast(str, _database_url)
-
-
-@dataclass
-class _FakeContent:
-    text: str
-
-
-@dataclass
-class _FakeSegment:
-    content: list[_FakeContent]
-
-
-@dataclass
-class _FakeResponse:
-    output_text: str | None = None
-
-
-class _RunnerStub:
-    def __init__(self, payloads: list[Any]) -> None:
-        self.payloads = payloads
-        self.calls: list[dict[str, Any]] = []
-
-    async def __call__(self, agent: Any, payload: str, *, run_config: Any) -> Any:
-        self.calls.append({"payload": payload, "run_config": run_config})
-        return SimpleNamespace(final_output=self.payloads.pop(0))
 
 
 @pytest.mark.asyncio
@@ -98,15 +71,19 @@ async def test_live_agent_iteration_with_database(monkeypatch: pytest.MonkeyPatc
         }
     )
 
-    runner_stub = _RunnerStub([
-        _IterationDecisionPayload.model_validate_json(iteration_payload),
-        _FinalRecommendationPayload.model_validate_json(final_payload),
-    ])
-    monkeypatch.setattr(Runner, "run", runner_stub)
+    # Mock structured LLM to return payloads
+    iteration_result = _IterationDecisionPayload.model_validate_json(iteration_payload)
+    final_result = _FinalRecommendationPayload.model_validate_json(final_payload)
+
+    mock_llm_client = monkeypatch.MagicMock()
+    mock_structured = monkeypatch.AsyncMock()
+    mock_llm_client.with_structured_output.return_value = mock_structured
+    mock_structured.ainvoke.side_effect = [iteration_result, final_result]
+
+    monkeypatch.setattr("ai_agent._create_llm_client", lambda config: mock_llm_client)
 
     agent = AccommodationAgent(
         config,
-        openai_client=None,  # type: ignore[arg-type]
         prompt_templates=prompts,
     )
 
